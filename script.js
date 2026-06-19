@@ -1,52 +1,47 @@
 // ========== PROTECT DASHBOARD ==========
 const token = localStorage.getItem('token');
 if (!token) {
-  // No token – redirect to login
-  window.location.href = 'login.html';
+    window.location.href = 'login.html';
 }
 
-// Optional: You can decode the token to show user's name
 const userData = JSON.parse(localStorage.getItem('user') || '{}');
 console.log('👋 Welcome,', userData.name || 'User');
 
+const API_BASE = 'https://studyflow-2kcz.onrender.com';
+
 // ========== UPDATE DASHBOARD STATS ==========
 async function updateStats() {
-        async function updateStats() {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const userId = user.id;
-        if (!userId) return;
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id;
+    if (!userId) return;
 
-        try {
-            // ---------- UPDATE ACTIVE SUBJECTS (Stat 1) ----------
-            const subRes = await fetch(`https://studyflow-2kcz.onrender.com?userId=${userId}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (subRes.ok) {
-                const subjects = await subRes.json();
-                const statValues = document.querySelectorAll('.stat-value');
-                if (statValues.length >= 1) {
-                    statValues[0].textContent = subjects.length; // Active Subjects
-                }
+    try {
+        // ---------- UPDATE ACTIVE SUBJECTS (Stat 1) ----------
+        const subRes = await fetch(`${API_BASE}/api/subjects?userId=${userId}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (subRes.ok) {
+            const subjects = await subRes.json();
+            const statValues = document.querySelectorAll('.stat-value');
+            if (statValues.length >= 1) {
+                statValues[0].textContent = subjects.length;
             }
-
-            // ---------- UPDATE PENDING ASSIGNMENTS (Stat 2) ----------
-            const assignRes = await fetch(`https://studyflow-2kcz.onrender.com/api/assignments?userId=${userId}&filter=pending`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (assignRes.ok) {
-                const pendingAssignments = await assignRes.json();
-                const statValues = document.querySelectorAll('.stat-value');
-                if (statValues.length >= 2) {
-                    statValues[1].textContent = pendingAssignments.length; // Pending Tasks
-                }
-            }
-
-            // ---------- WE'LL ADD MORE STATS LATER (Study Time, Completion %) ----------
-            // For now, these two work!
-
-        } catch (err) {
-            console.error('Failed to update stats:', err);
         }
+
+        // ---------- UPDATE PENDING ASSIGNMENTS (Stat 2) ----------
+        const assignRes = await fetch(`${API_BASE}/api/assignments?userId=${userId}&filter=pending`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (assignRes.ok) {
+            const pendingAssignments = await assignRes.json();
+            const statValues = document.querySelectorAll('.stat-value');
+            if (statValues.length >= 2) {
+                statValues[1].textContent = pendingAssignments.length;
+            }
+        }
+
+    } catch (err) {
+        console.error('Failed to update stats:', err);
     }
 }
 
@@ -55,13 +50,13 @@ async function updateStats() {
     let pomodoroInterval = null;
     let pomodoroTime = 25 * 60;
     let pomodoroIsBreak = false;
-    let goals = []; // We'll fetch from backend
+    let goals = [];
     let xp = parseInt(localStorage.getItem('xp')) || 0;
     let level = parseInt(localStorage.getItem('level')) || 1;
     let badges = JSON.parse(localStorage.getItem('badges')) || [];
-    let assignmentsData = []; // We'll fetch from backend
-    let calendarEvents = []; // Will be loaded from backend
-    let scheduleClasses = []; // Will be loaded from backend
+    let assignmentsData = [];
+    let calendarEvents = [];
+    let scheduleClasses = [];
     let calendarYear, calendarMonth;
     let selectedCalendarDate = null;
     let steadyTimer = null;
@@ -76,19 +71,17 @@ async function updateStats() {
 
     const now = new Date();
     calendarYear = now.getFullYear();
-    calendarMonth = now.getMonth(); // 0-indexed
+    calendarMonth = now.getMonth();
     selectedCalendarDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     // ========== DOM READY ==========
     document.addEventListener('DOMContentLoaded', () => {
-        // Show logged-in user's name
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         const nameEl = document.getElementById('dashboardUserName');
         if (nameEl && user.name) {
             nameEl.textContent = user.name;
         }
 
-        // ========== UPDATE MAIN GREETING ==========
         const greetingEl = document.getElementById('dashboardGreeting');
         if (greetingEl && user.name) {
             greetingEl.textContent = `Welcome back, ${user.name}`;
@@ -117,7 +110,7 @@ async function updateStats() {
             window.location.href = 'login.html';
         });
 
-         // ========== ADD SUBJECT ==========
+        // ========== ADD SUBJECT ==========
         const addSubjectBtn = document.getElementById('addSubjectBtn');
         if (addSubjectBtn) {
             addSubjectBtn.addEventListener('click', async () => {
@@ -132,7 +125,7 @@ async function updateStats() {
                 }
 
                 try {
-                    const response = await fetch('https://studyflow-2kcz.onrender.com', {
+                    const response = await fetch(`${API_BASE}/api/subjects`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -147,71 +140,66 @@ async function updateStats() {
                         return;
                     }
 
-                    // Success! Reload the subjects list
                     loadSubjects();
-                    // Also update the dashboard stats (total subjects)
                     updateStats();
                 } catch (err) {
                     console.error('Add subject error:', err);
-                    alert('Could not connect to server. Is the backend running?');
+                    alert('Could not connect to server.');
                 }
             });
         }
-        
-            // ========== ADD ASSIGNMENT ==========
-            const addAssignmentBtn = document.getElementById('addAssignmentBtn');
-            if (addAssignmentBtn) {
-                addAssignmentBtn.addEventListener('click', async () => {
-                    const title = prompt('Assignment title:');
-                    if (!title || title.trim() === '') return;
-                
-                    const subject = prompt('Subject (e.g., Math, CS):');
-                    if (!subject || subject.trim() === '') return;
-                
-                    const dueDate = prompt('Due date (YYYY-MM-DD, or leave blank):');
-                    const dueDateValue = dueDate && dueDate.trim() ? dueDate.trim() : null;
-                
-                    const user = JSON.parse(localStorage.getItem('user') || '{}');
-                    if (!user.id) {
-                        alert('Please log in first.');
+
+        // ========== ADD ASSIGNMENT ==========
+        const addAssignmentBtn = document.getElementById('addAssignmentBtn');
+        if (addAssignmentBtn) {
+            addAssignmentBtn.addEventListener('click', async () => {
+                const title = prompt('Assignment title:');
+                if (!title || title.trim() === '') return;
+
+                const subject = prompt('Subject (e.g., Math, CS):');
+                if (!subject || subject.trim() === '') return;
+
+                const dueDate = prompt('Due date (YYYY-MM-DD, or leave blank):');
+                const dueDateValue = dueDate && dueDate.trim() ? dueDate.trim() : null;
+
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
+                if (!user.id) {
+                    alert('Please log in first.');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${API_BASE}/api/assignments`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        },
+                        body: JSON.stringify({
+                            userId: user.id,
+                            title: title.trim(),
+                            subject: subject.trim(),
+                            dueDate: dueDateValue
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const data = await response.json();
+                        alert('Failed to add assignment: ' + (data.error || 'Unknown error'));
                         return;
                     }
-                
-                    try {
-                        const response = await fetch('https://studyflow-2kcz.onrender.com/api/assignments', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${localStorage.getItem('token')}`
-                            },
-                            body: JSON.stringify({
-                                userId: user.id,
-                                title: title.trim(),
-                                subject: subject.trim(),
-                                dueDate: dueDateValue
-                            })
-                        });
-                    
-                        if (!response.ok) {
-                            const data = await response.json();
-                            alert('Failed to add assignment: ' + (data.error || 'Unknown error'));
-                            return;
-                        }
-                    
-                        // Reload assignments
-                        const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
-                        await renderAssignments(activeFilter);
-                        updateStats();
-                        alert('✅ Assignment added!');
-                    
-                    } catch (err) {
-                        console.error('Add assignment error:', err);
-                        alert('Could not connect to server.');
-                    }
-                });
-            }
 
-        
+                    const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
+                    await renderAssignments(activeFilter);
+                    updateStats();
+                    alert('✅ Assignment added!');
+
+                } catch (err) {
+                    console.error('Add assignment error:', err);
+                    alert('Could not connect to server.');
+                }
+            });
+        }
     });
 
     // ========== HELPERS ==========
@@ -268,7 +256,6 @@ async function updateStats() {
         overlay.querySelector('.modal-save').addEventListener('click', () => {
             if (onSave(overlay)) close();
         });
-        // Escape key
         const escHandler = (e) => { if (e.key === 'Escape') { close();
                 document.removeEventListener('keydown', escHandler); } };
         document.addEventListener('keydown', escHandler);
@@ -293,7 +280,6 @@ async function updateStats() {
                     sidebar.classList.remove('open');
                     if (overlay) overlay.classList.remove('active');
                 }
-                // Refresh calendar if navigating to it
                 if (pageId === 'calendar-page') renderCalendar();
                 if (pageId === 'schedule-page') renderSchedule();
             });
@@ -330,7 +316,6 @@ async function updateStats() {
     // ========== DARK MODE ==========
     function initDarkMode() {
         const toggle = document.getElementById('darkModeToggle');
-        // Check system preference first, then localStorage
         const stored = localStorage.getItem('darkMode');
         let isDark;
         if (stored !== null) {
@@ -350,7 +335,6 @@ async function updateStats() {
             toggle.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
         });
 
-        // Listen for system changes
         if (window.matchMedia) {
             window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
                 if (localStorage.getItem('darkMode') === null) {
@@ -504,8 +488,7 @@ async function updateStats() {
     function initGamification() { updateBadgesAndXP(); }
 
     // ========== ASSIGNMENTS ==========
-    function saveAssignments() { localStorage.setItem('assignmentsData', JSON.stringify(
-        assignmentsData)); }
+    function saveAssignments() { localStorage.setItem('assignmentsData', JSON.stringify(assignmentsData)); }
 
     function renderAssignments(filter = "all") {
         const container = document.getElementById('assignmentsList');
@@ -555,7 +538,7 @@ async function updateStats() {
         if (!userId) return;
 
         try {
-            const response = await fetch(`https://studyflow-2kcz.onrender.com/api/calendar?userId=${userId}`, {
+            const response = await fetch(`${API_BASE}/api/calendar?userId=${userId}`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
             if (!response.ok) throw new Error('Failed to fetch events');
@@ -572,12 +555,11 @@ async function updateStats() {
         return calendarEvents.filter(e => e.dateKey === key);
     }
 
-        async function renderCalendar() {
+    async function renderCalendar() {
         const grid = document.getElementById('calendarGrid');
         const label = document.getElementById('calendarMonthLabel');
         if (!grid || !label) return;
 
-        // Load events from backend first
         await loadCalendarEvents();
 
         const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -592,17 +574,14 @@ async function updateStats() {
         const today = new Date();
         const todayKey = formatDateKey(today.getFullYear(), today.getMonth(), today.getDate());
 
-        // Helper to check if a date has events
         const hasEvents = (key) => calendarEvents.some(e => e.date_key === key);
 
-        // Prev month padding
         for (let i = firstDay - 1; i >= 0; i--) {
             const d = daysInPrevMonth - i;
             const key = formatDateKey(calendarYear, calendarMonth - 1, d);
             html += `<div class="calendar-day other-month${hasEvents(key) ? ' has-events' : ''}" data-date-key="${key}">${d}</div>`;
         }
 
-        // Current month
         for (let d = 1; d <= daysInMonth; d++) {
             const key = formatDateKey(calendarYear, calendarMonth, d);
             const isToday = key === todayKey;
@@ -610,7 +589,6 @@ async function updateStats() {
             html += `<div class="calendar-day${isToday ? ' today' : ''}${isSelected ? ' selected' : ''}${hasEvents(key) ? ' has-events' : ''}" data-date-key="${key}">${d}</div>`;
         }
 
-        // Next month padding
         const remaining = 42 - (firstDay + daysInMonth);
         for (let d = 1; d <= remaining; d++) {
             const key = formatDateKey(calendarYear, calendarMonth + 1, d);
@@ -619,7 +597,6 @@ async function updateStats() {
 
         grid.innerHTML = html;
 
-        // Click handlers for current month days
         grid.querySelectorAll('.calendar-day:not(.other-month)').forEach(dayEl => {
             dayEl.addEventListener('click', () => {
                 const key = dayEl.dataset.dateKey;
@@ -630,7 +607,6 @@ async function updateStats() {
             });
         });
 
-        // Click handlers for other month days (navigate)
         grid.querySelectorAll('.calendar-day.other-month').forEach(dayEl => {
             dayEl.addEventListener('click', () => {
                 const key = dayEl.dataset.dateKey;
@@ -646,7 +622,7 @@ async function updateStats() {
         renderEventsPanel();
     }
 
-        function renderEventsPanel() {
+    function renderEventsPanel() {
         const panel = document.getElementById('calendarEventsPanel');
         const label = document.getElementById('selectedDateLabel');
         const list = document.getElementById('eventsList');
@@ -668,7 +644,6 @@ async function updateStats() {
             list.innerHTML = '<div class="no-events">No events for this date</div>';
         } else {
             list.innerHTML = events.map((e, i) => {
-                const realIdx = calendarEvents.indexOf(e);
                 return `
                         <div class="event-item">
                             <div class="event-color-dot" style="background:${escapeHtml(e.color || '#4f46e5')}"></div>
@@ -677,7 +652,6 @@ async function updateStats() {
                         </div>`;
             }).join('');
 
-            // Delete button handlers
             list.querySelectorAll('.event-delete').forEach(btn => {
                 btn.addEventListener('click', async () => {
                     const eventId = parseInt(btn.dataset.eventId);
@@ -687,13 +661,13 @@ async function updateStats() {
         }
     }
 
-        async function deleteCalendarEvent(id) {
+    async function deleteCalendarEvent(id) {
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         if (!user.id) return;
         if (!confirm('Delete this event?')) return;
 
         try {
-            const response = await fetch(`https://studyflow-2kcz.onrender.com/api/calendar/${id}`, {
+            const response = await fetch(`${API_BASE}/api/calendar/${id}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -704,7 +678,6 @@ async function updateStats() {
 
             if (!response.ok) throw new Error('Failed to delete event');
 
-            // Refresh the calendar
             await renderCalendar();
             showNotification('Event deleted');
 
@@ -719,6 +692,7 @@ async function updateStats() {
         const nextBtn = document.getElementById('calendarNext');
         const todayBtn = document.getElementById('calendarTodayBtn');
         const addBtn = document.getElementById('addEventBtn');
+
         if (prevBtn) prevBtn.addEventListener('click', () => {
             calendarMonth--;
             if (calendarMonth < 0) { calendarMonth = 11;
@@ -738,7 +712,8 @@ async function updateStats() {
             selectedCalendarDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             renderCalendar();
         });
-                if (addBtn) {
+
+        if (addBtn) {
             addBtn.addEventListener('click', () => {
                 const defaultKey = selectedCalendarDate ?
                     formatDateKey(selectedCalendarDate.getFullYear(), selectedCalendarDate.getMonth(), selectedCalendarDate.getDate()) :
@@ -769,7 +744,7 @@ async function updateStats() {
                         if (!user.id) { showNotification('Please log in first.', true); return false; }
 
                         try {
-                            const response = await fetch('https://studyflow-2kcz.onrender.com/api/calendar', {
+                            const response = await fetch(`${API_BASE}/api/calendar`, {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
@@ -790,7 +765,6 @@ async function updateStats() {
                                 return false;
                             }
 
-                            // Refresh the calendar
                             await renderCalendar();
                             showNotification('✅ Event added!');
                             return true;
@@ -808,8 +782,7 @@ async function updateStats() {
     }
 
     // ========== CLASS SCHEDULE ==========
-    function saveScheduleClasses() { localStorage.setItem('scheduleClasses', JSON.stringify(
-    scheduleClasses)); }
+    function saveScheduleClasses() { localStorage.setItem('scheduleClasses', JSON.stringify(scheduleClasses)); }
 
     function getDefaultSchedule() {
         return [
@@ -831,17 +804,14 @@ async function updateStats() {
         const legend = document.getElementById('scheduleLegend');
         if (!grid) return;
 
-        // Load from backend first
         await loadSchedule();
 
         const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
         const timeSlots = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
 
-        // Header row
         let html = '<div class="schedule-time-label">Time</div>';
         days.forEach(d => { html += `<div class="schedule-day-header">${d}</div>`; });
 
-        // Time rows
         timeSlots.forEach(time => {
             html += `<div class="schedule-time-label">${time}</div>`;
             for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
@@ -862,17 +832,8 @@ async function updateStats() {
 
         grid.innerHTML = html;
 
-        // Legend
         if (legend) {
             const uniqueSubjects = [...new Set(scheduleClasses.map(c => c.subject))];
-            const colorMap = {
-                'Computer Science': 'color-cs',
-                'Mathematics': 'color-math',
-                'Physics': 'color-physics',
-                'Chemistry': 'color-chemistry',
-                'English Literature': 'color-english',
-                'History': 'color-history'
-            };
             const dotColors = {
                 'color-cs': '#0891b2',
                 'color-math': '#6366f1',
@@ -889,14 +850,30 @@ async function updateStats() {
         }
     }
 
+    async function loadSchedule() {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const userId = user.id;
+        if (!userId) return;
+
+        try {
+            const response = await fetch(`${API_BASE}/api/schedule?userId=${userId}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (!response.ok) throw new Error('Failed to fetch schedule');
+            const data = await response.json();
+            scheduleClasses = data;
+        } catch (err) {
+            console.error('Load schedule error:', err);
+            scheduleClasses = [];
+        }
+    }
+
     function initSchedule() {
-        // Render the schedule (loads from backend)
         renderSchedule();
 
         const addBtn = document.getElementById('addClassBtn');
         const resetBtn = document.getElementById('resetScheduleBtn');
 
-        // ---------- ADD CLASS ----------
         if (addBtn) {
             addBtn.addEventListener('click', () => {
                 openModal('Add Class', `
@@ -940,7 +917,7 @@ async function updateStats() {
                         if (!user.id) { showNotification('Please log in first.', true); return false; }
 
                         try {
-                            const response = await fetch('https://studyflow-2kcz.onrender.com/api/schedule', {
+                            const response = await fetch(`${API_BASE}/api/schedule`, {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
@@ -977,7 +954,6 @@ async function updateStats() {
             });
         }
 
-        // ---------- RESET SCHEDULE ----------
         if (resetBtn) {
             resetBtn.addEventListener('click', async () => {
                 if (!confirm('Reset schedule to default? This will replace all your current classes.')) return;
@@ -986,7 +962,7 @@ async function updateStats() {
                 if (!user.id) { showNotification('Please log in first.', true); return; }
 
                 try {
-                    const response = await fetch('https://studyflow-2kcz.onrender.com/api/schedule/reset', {
+                    const response = await fetch(`${API_BASE}/api/schedule/reset`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1019,8 +995,7 @@ async function updateStats() {
             const h = Math.floor(steadyTimeLeft / 3600);
             const m = Math.floor((steadyTimeLeft % 3600) / 60);
             const s = steadyTimeLeft % 60;
-            el.textContent =
-                `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+            el.textContent = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
         }
         const total = isSteadyStudy ? studySecs : restSecs;
         const progress = total > 0 ? ((total - steadyTimeLeft) / total) * 100 : 0;
@@ -1086,8 +1061,7 @@ async function updateStats() {
         const focusEl = document.getElementById('todayFocusTime');
         const sessionsEl = document.getElementById('totalSessions');
         const streakEl = document.getElementById('steadyStreak');
-        if (focusEl) focusEl.innerText =
-            `${Math.floor(totalFocusSecs/3600)}h ${Math.floor((totalFocusSecs%3600)/60)}m`;
+        if (focusEl) focusEl.innerText = `${Math.floor(totalFocusSecs/3600)}h ${Math.floor((totalFocusSecs%3600)/60)}m`;
         if (sessionsEl) sessionsEl.innerText = totalSteadySessions;
         if (streakEl) streakEl.innerText = `${streak} days`;
     }
@@ -1097,8 +1071,7 @@ async function updateStats() {
         const ratioSlider = document.getElementById('studyRatio');
         if (studySlider) studySlider.addEventListener('input', () => {
             const display = document.getElementById('studyHoursDisplay');
-            if (display) display.innerText = studySlider.value + (studySlider.value == 1 ? ' hour' :
-                ' hours');
+            if (display) display.innerText = studySlider.value + (studySlider.value == 1 ? ' hour' : ' hours');
             recalcRest();
             if (!steadyTimer) steadyTimeLeft = studySecs;
             updateSteadyDisplay();
@@ -1162,11 +1135,9 @@ async function updateStats() {
             });
         });
         const globalAdd = document.getElementById('globalAddTask');
-        if (globalAdd) globalAdd.addEventListener('click', () => showNotification(
-                '➕ Add task form would open'));
+        if (globalAdd) globalAdd.addEventListener('click', () => showNotification('➕ Add task form would open'));
         const searchBtn = document.getElementById('searchBtn');
-        if (searchBtn) searchBtn.addEventListener('click', () => showNotification(
-            '🔍 Search feature coming soon'));
+        if (searchBtn) searchBtn.addEventListener('click', () => showNotification('🔍 Search feature coming soon'));
     }
 
     // ========== ENTRANCE ANIMATION ==========
@@ -1182,7 +1153,8 @@ async function updateStats() {
             }, i * 50);
         });
     }
-        // ========== LOAD SUBJECTS FROM BACKEND ==========
+
+    // ========== LOAD SUBJECTS ==========
     async function loadSubjects() {
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         const userId = user.id;
@@ -1192,12 +1164,10 @@ async function updateStats() {
         }
 
         try {
-            const response = await fetch(`https://studyflow-2kcz.onrender.com?userId=${userId}`, {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                }
+            const response = await fetch(`${API_BASE}/api/subjects?userId=${userId}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
-            
+
             if (!response.ok) {
                 console.error('Failed to fetch subjects:', response.status);
                 return;
@@ -1223,96 +1193,95 @@ async function updateStats() {
         }
     }
 
-    // ========== renderAssignments ==========
-            async function renderAssignments(filter = "all") {
-            const container = document.getElementById('assignmentsList');
-            if (!container) return;
-                
-            const user = JSON.parse(localStorage.getItem('user') || '{}');
-            const userId = user.id;
-            if (!userId) {
-                container.innerHTML = '<p style="color:var(--text-tertiary);">Please log in to see assignments.</p>';
+    // ========== RENDER ASSIGNMENTS ==========
+    async function renderAssignments(filter = "all") {
+        const container = document.getElementById('assignmentsList');
+        if (!container) return;
+
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const userId = user.id;
+        if (!userId) {
+            container.innerHTML = '<p style="color:var(--text-tertiary);">Please log in to see assignments.</p>';
+            return;
+        }
+
+        try {
+            const url = `${API_BASE}/api/assignments?userId=${userId}&filter=${filter}`;
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+
+            if (!response.ok) throw new Error('Failed to fetch assignments');
+
+            const data = await response.json();
+            assignmentsData = data;
+
+            if (assignmentsData.length === 0) {
+                container.innerHTML = '<p style="color:var(--text-tertiary);">📭 No assignments yet. Add one!</p>';
                 return;
             }
-        
-            try {
-                const url = `https://studyflow-2kcz.onrender.com/api/assignments?userId=${userId}&filter=${filter}`;
-                const response = await fetch(url, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                });
-            
-                if (!response.ok) throw new Error('Failed to fetch assignments');
-            
-                const data = await response.json();
-                assignmentsData = data; // Update global array
-            
-                if (assignmentsData.length === 0) {
-                    container.innerHTML = '<p style="color:var(--text-tertiary);">📭 No assignments yet. Add one!</p>';
-                    return;
-                }
-            
-                container.innerHTML = assignmentsData.map((a, idx) => {
-                    // Map due date to display format
-                    const dueDisplay = a.due_date ? new Date(a.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'No date';
-                    return `
-                        <div class="assignment-item">
-                            <input type="checkbox" class="assign-check" data-id="${a.id}" ${a.completed ? 'checked' : ''} aria-label="Mark complete">
-                            <div>
-                                <strong>${escapeHtml(a.title)}</strong>
-                                <div style="font-size:0.8rem">${escapeHtml(a.subject)} • Due ${escapeHtml(dueDisplay)}</div>
-                            </div>
+
+            container.innerHTML = assignmentsData.map((a) => {
+                const dueDisplay = a.due_date ? new Date(a.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'No date';
+                return `
+                    <div class="assignment-item">
+                        <input type="checkbox" class="assign-check" data-id="${a.id}" ${a.completed ? 'checked' : ''} aria-label="Mark complete">
+                        <div>
+                            <strong>${escapeHtml(a.title)}</strong>
+                            <div style="font-size:0.8rem">${escapeHtml(a.subject)} • Due ${escapeHtml(dueDisplay)}</div>
                         </div>
-                    `;
-                }).join('');
-            
-                // Add event listeners to checkboxes
-                container.querySelectorAll('.assign-check').forEach(cb => {
-                    cb.addEventListener('change', async (e) => {
-                        const assignmentId = parseInt(cb.dataset.id);
-                        const isChecked = cb.checked;
-                        await toggleAssignment(assignmentId, isChecked);
-                    });
+                    </div>
+                `;
+            }).join('');
+
+            container.querySelectorAll('.assign-check').forEach(cb => {
+                cb.addEventListener('change', async (e) => {
+                    const assignmentId = parseInt(cb.dataset.id);
+                    const isChecked = cb.checked;
+                    await toggleAssignment(assignmentId, isChecked);
                 });
-            
-            } catch (err) {
-                console.error('Render assignments error:', err);
-                container.innerHTML = '<p style="color:var(--danger);">Failed to load assignments.</p>';
-            }
+            });
+
+        } catch (err) {
+            console.error('Render assignments error:', err);
+            container.innerHTML = '<p style="color:var(--danger);">Failed to load assignments.</p>';
         }
-        // ========== toggleAssignment ==========
-            async function toggleAssignment(id, completed) {
-                const user = JSON.parse(localStorage.getItem('user') || '{}');
-                try {
-                    const response = await fetch(`https://studyflow-2kcz.onrender.com/api/assignments/${id}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`
-                        },
-                        body: JSON.stringify({
-                            userId: user.id,
-                            completed: completed
-                        })
-                    });
-                
-                    if (!response.ok) throw new Error('Failed to update assignment');
-                
-                    // Add XP if completed
-                    if (completed) {
-                        addXP(5); // Award XP for completing a task
-                    }
-                
-                    // Reload the current view
-                    const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
-                    await renderAssignments(activeFilter);
-                    updateStats(); // Update dashboard stats
-                
-                } catch (err) {
-                    console.error('Toggle assignment error:', err);
-                    alert('Failed to update assignment.');
-                }
+    }
+
+    // ========== TOGGLE ASSIGNMENT ==========
+    async function toggleAssignment(id, completed) {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        try {
+            const response = await fetch(`${API_BASE}/api/assignments/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    userId: user.id,
+                    completed: completed
+                })
+            });
+
+            if (!response.ok) throw new Error('Failed to update assignment');
+
+            if (completed) {
+                addXP(5);
             }
-                async function renderGoals() {
+
+            const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
+            await renderAssignments(activeFilter);
+            updateStats();
+
+        } catch (err) {
+            console.error('Toggle assignment error:', err);
+            alert('Failed to update assignment.');
+        }
+    }
+
+    // ========== RENDER GOALS ==========
+    async function renderGoals() {
         const container = document.getElementById('goalsList');
         if (!container) return;
 
@@ -1324,21 +1293,21 @@ async function updateStats() {
         }
 
         try {
-            const response = await fetch(`https://studyflow-2kcz.onrender.com/api/goals?userId=${userId}`, {
+            const response = await fetch(`${API_BASE}/api/goals?userId=${userId}`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
 
             if (!response.ok) throw new Error('Failed to fetch goals');
 
             const data = await response.json();
-            goals = data; // Update global array
+            goals = data;
 
             if (goals.length === 0) {
                 container.innerHTML = '<p style="color:var(--text-tertiary);">✨ Add your first goal!</p>';
                 return;
             }
 
-            container.innerHTML = goals.map((g, idx) => `
+            container.innerHTML = goals.map((g) => `
                 <div class="goal-item">
                     <input type="checkbox" class="goal-check" data-id="${g.id}" ${g.done ? 'checked' : ''} aria-label="Complete goal">
                     <span style="flex:1;${g.done ? 'text-decoration:line-through;opacity:0.6' : ''}">${escapeHtml(g.text)}</span>
@@ -1346,7 +1315,6 @@ async function updateStats() {
                 </div>
             `).join('');
 
-            // Add event listeners for checkboxes
             container.querySelectorAll('.goal-check').forEach(cb => {
                 cb.addEventListener('change', async (e) => {
                     const goalId = parseInt(cb.dataset.id);
@@ -1355,7 +1323,6 @@ async function updateStats() {
                 });
             });
 
-            // Add event listeners for delete buttons
             container.querySelectorAll('.del-goal').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
                     const goalId = parseInt(btn.dataset.id);
@@ -1369,10 +1336,10 @@ async function updateStats() {
         }
     }
 
-        async function toggleGoal(id, done) {
+    async function toggleGoal(id, done) {
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         try {
-            const response = await fetch(`https://studyflow-2kcz.onrender.com/api/goals/${id}`, {
+            const response = await fetch(`${API_BASE}/api/goals/${id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1386,9 +1353,8 @@ async function updateStats() {
 
             if (!response.ok) throw new Error('Failed to update goal');
 
-            // Award XP for completing a goal
             if (done) {
-                addXP(5); // 5 XP per goal (matches your original code)
+                addXP(5);
             }
 
             await renderGoals();
@@ -1399,12 +1365,12 @@ async function updateStats() {
         }
     }
 
-        async function deleteGoal(id) {
+    async function deleteGoal(id) {
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         if (!confirm('Delete this goal?')) return;
 
         try {
-            const response = await fetch(`https://studyflow-2kcz.onrender.com/api/goals/${id}`, {
+            const response = await fetch(`${API_BASE}/api/goals/${id}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1423,7 +1389,7 @@ async function updateStats() {
         }
     }
 
-        async function addGoal() {
+    async function addGoal() {
         const input = document.getElementById('newGoalInput');
         const text = input.value.trim();
         if (!text) return;
@@ -1435,7 +1401,7 @@ async function updateStats() {
         }
 
         try {
-            const response = await fetch('https://studyflow-2kcz.onrender.com/api/goals', {
+            const response = await fetch(`${API_BASE}/api/goals`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1459,24 +1425,6 @@ async function updateStats() {
         } catch (err) {
             console.error('Add goal error:', err);
             alert('Could not connect to server.');
-        }
-    }
-        // ========== LOAD SCHEDULE FROM BACKEND ==========
-    async function loadSchedule() {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const userId = user.id;
-        if (!userId) return;
-
-        try {
-            const response = await fetch(`https://studyflow-2kcz.onrender.com/api/schedule?userId=${userId}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!response.ok) throw new Error('Failed to fetch schedule');
-            const data = await response.json();
-            scheduleClasses = data;
-        } catch (err) {
-            console.error('Load schedule error:', err);
-            scheduleClasses = [];
         }
     }
 
