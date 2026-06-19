@@ -1,7 +1,7 @@
 // ========== PROTECT DASHBOARD ==========
 const token = localStorage.getItem('token');
 if (!token) {
-    window.location.href = '/';
+    window.location.href = 'login.html';
 }
 
 const userData = JSON.parse(localStorage.getItem('user') || '{}');
@@ -107,7 +107,7 @@ async function updateStats() {
         document.getElementById('logoutBtn')?.addEventListener('click', () => {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
-            window.location.href = '/';
+            window.location.href = 'login.html';
         });
 
         // ========== ADD SUBJECT ==========
