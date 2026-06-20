@@ -1,184 +1,190 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Forgot Password · StudyFlow</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StudyFlow · Forgot Password</title>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        :root {
-            --primary: #4f46e5;
-            --primary-light: #6366f1;
-            --bg: #f8fafc;
-            --surface: #ffffff;
-            --border: #e2e8f0;
-            --text-primary: #0f172a;
-            --text-secondary: #475569;
-            --text-tertiary: #94a3b8;
-            --shadow-md: 0 4px 20px rgba(0,0,0,0.08);
-            --font-body: 'DM Sans', sans-serif;
-            --font-display: 'Crimson Pro', serif;
-            --radius: 20px;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
         body {
-            font-family: var(--font-body);
-            background: var(--bg);
-            color: var(--text-primary);
+            font-family: 'DM Sans', sans-serif;
+            background: #f1f5f9;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 1.5rem;
         }
-        .auth-card {
-            background: var(--surface);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow-md);
-            padding: 2.5rem 2.2rem;
-            width: 100%;
+        .card {
+            background: white;
+            border-radius: 22px;
+            padding: 2.5rem;
             max-width: 440px;
-            border: 1px solid var(--border);
+            width: 100%;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.12);
+            border: 1px solid #e2e8f0;
         }
-        .auth-card .logo {
+        .logo {
             display: flex;
             align-items: center;
-            gap: 0.7rem;
+            gap: 0.75rem;
+            margin-bottom: 2rem;
             justify-content: center;
-            margin-bottom: 1.8rem;
         }
-        .auth-card .logo-icon {
-            width: 44px;
-            height: 44px;
-            background: linear-gradient(135deg, var(--primary), var(--primary-light));
-            border-radius: 14px;
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #4f46e5, #6366f1);
+            border-radius: 15px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 1.4rem;
-            font-weight: 700;
-        }
-        .auth-card .logo-text {
-            font-family: var(--font-display);
-            font-size: 1.8rem;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-        }
-        .auth-card h2 {
-            font-family: var(--font-display);
             font-size: 1.6rem;
-            text-align: center;
-            margin-bottom: 0.2rem;
+            font-weight: 700;
         }
-        .auth-card .subtitle {
-            text-align: center;
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            margin-bottom: 1.8rem;
+        .logo-text {
+            font-family: 'Crimson Pro', serif;
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #4338ca, #4f46e5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
-        .form-group { margin-bottom: 1.2rem; }
-        .form-group label {
+        h2 {
+            font-family: 'Crimson Pro', serif;
+            font-size: 1.75rem;
+            margin-bottom: 0.25rem;
+        }
+        .subtitle {
+            color: #64748b;
+            margin-bottom: 1.5rem;
+        }
+        .form-group {
+            margin-bottom: 1.2rem;
+        }
+        label {
             display: block;
             font-weight: 600;
-            font-size: 0.85rem;
-            margin-bottom: 0.3rem;
-            color: var(--text-secondary);
+            font-size: 0.82rem;
+            margin-bottom: 0.35rem;
+            color: #475569;
         }
-        .form-group input {
+        input[type="email"] {
             width: 100%;
-            padding: 0.7rem 1rem;
-            border: 1px solid var(--border);
+            padding: 0.75rem 1rem;
+            border: 2px solid #e2e8f0;
             border-radius: 14px;
-            font-size: 1rem;
-            background: var(--bg);
-            color: var(--text-primary);
-            transition: border 0.2s, box-shadow 0.2s;
-            font-family: var(--font-body);
+            font-size: 0.95rem;
+            background: #f8fafc;
+            transition: border 0.2s;
         }
-        .form-group input:focus {
+        input[type="email"]:focus {
             outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 5px rgba(79, 70, 229, 0.15);
         }
-        .btn-primary {
+        .btn {
             width: 100%;
-            padding: 0.8rem;
-            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            padding: 0.85rem;
+            background: linear-gradient(135deg, #4f46e5, #6366f1);
             border: none;
             border-radius: 40px;
             color: white;
             font-weight: 700;
             font-size: 1rem;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            font-family: var(--font-body);
-            margin-top: 0.5rem;
+            transition: transform 0.2s;
         }
-        .btn-primary:hover {
+        .btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(79, 70, 229, 0.3);
+            box-shadow: 0 12px 28px rgba(79, 70, 229, 0.35);
+        }
+        .btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
         }
         .alert {
             padding: 0.7rem 1rem;
-            border-radius: 12px;
-            font-size: 0.85rem;
-            margin-bottom: 1rem;
+            border-radius: 14px;
+            font-size: 0.84rem;
+            font-weight: 500;
+            margin-bottom: 1.2rem;
             display: none;
         }
-        .alert-success { background: #dcfce7; color: #166534; display: block; }
-        .alert-error { background: #fee2e2; color: #b91c1c; display: block; }
+        .alert.show {
+            display: block;
+        }
+        .alert-error {
+            background: #fef2f2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+        }
+        .alert-success {
+            background: #f0fdf4;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
         .back-link {
+            display: block;
             text-align: center;
-            margin-top: 1.5rem;
-            font-size: 0.9rem;
-        }
-        .back-link a {
-            color: var(--primary);
-            text-decoration: none;
+            margin-top: 1rem;
+            color: #4f46e5;
             font-weight: 600;
+            text-decoration: none;
         }
-        .back-link a:hover { text-decoration: underline; }
+        .back-link:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
-    <div class="auth-card">
+    <div class="card">
         <div class="logo">
             <div class="logo-icon">📘</div>
             <span class="logo-text">StudyFlow</span>
         </div>
+        <h2>Forgot Password</h2>
+        <p class="subtitle">Enter your email and we'll send you a reset link.</p>
 
-        <h2>Reset Password</h2>
-        <p class="subtitle">Enter your email and we'll send you a reset link</p>
-
-        <div id="alertMessage" class="alert"></div>
+        <div id="alert" class="alert"></div>
 
         <div class="form-group">
-            <label for="resetEmail">Email address</label>
-            <input type="email" id="resetEmail" placeholder="you@example.com">
+            <label for="email">Email</label>
+            <input type="email" id="email" placeholder="you@example.com" autocomplete="email" />
         </div>
-
-        <button class="btn-primary" id="sendResetBtn">Send Reset Link</button>
-
-        <div class="back-link">
-            <a href="login.html">← Back to Login</a>
-        </div>
+        <button class="btn" id="resetBtn">Send Reset Link</button>
+        <a href="login.html" class="back-link">← Back to Login</a>
     </div>
 
     <script>
-        const API_BASE = 'https://studyflow-2kcz.onrender.com';
+        const API_BASE = 'https://studyflow-2kcz.onrender.com'; // Your Render URL
+        const emailInput = document.getElementById('email');
+        const resetBtn = document.getElementById('resetBtn');
+        const alertEl = document.getElementById('alert');
 
-        document.getElementById('sendResetBtn').addEventListener('click', async () => {
-            const email = document.getElementById('resetEmail').value.trim();
-            const alert = document.getElementById('alertMessage');
+        function showAlert(msg, type = 'error') {
+            alertEl.textContent = msg;
+            alertEl.className = `alert alert-${type} show`;
+            clearTimeout(alertEl._timeout);
+            alertEl._timeout = setTimeout(() => alertEl.classList.remove('show'), 6000);
+        }
 
+        resetBtn.addEventListener('click', async () => {
+            const email = emailInput.value.trim();
             if (!email) {
-                alert.className = 'alert alert-error';
-                alert.textContent = 'Please enter your email address.';
+                showAlert('Please enter your email address.', 'error');
                 return;
             }
+
+            resetBtn.textContent = 'Sending...';
+            resetBtn.disabled = true;
 
             try {
                 const response = await fetch(`${API_BASE}/api/auth/forgot`, {
@@ -188,22 +194,29 @@
                 });
 
                 const data = await response.json();
+                if (!response.ok) {
+                    showAlert(data.error || 'Something went wrong.', 'error');
+                    resetBtn.textContent = 'Send Reset Link';
+                    resetBtn.disabled = false;
+                    return;
+                }
 
-                alert.className = 'alert alert-success';
-                alert.textContent = data.message || 'If an account exists, a reset link has been sent.';
-
-                document.getElementById('resetEmail').value = '';
-
+                showAlert('📧 If an account exists, a reset link has been sent.', 'success');
+                resetBtn.textContent = 'Send Reset Link';
+                resetBtn.disabled = false;
+                emailInput.value = '';
             } catch (err) {
-                alert.className = 'alert alert-error';
-                alert.textContent = 'Could not connect to server. Please try again.';
                 console.error(err);
+                showAlert('Could not connect to server.', 'error');
+                resetBtn.textContent = 'Send Reset Link';
+                resetBtn.disabled = false;
             }
         });
 
-        document.getElementById('resetEmail').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') document.getElementById('sendResetBtn').click();
+        emailInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') resetBtn.click();
         });
+        emailInput.focus();
     </script>
 </body>
 </html>
