@@ -342,6 +342,53 @@ async function updateStats() {
             await markAllRead();
             await loadNotifications();
         });
+            // ========== ADD REMINDER ==========
+            const addReminderBtn = document.getElementById('addReminderBtn');
+            if (addReminderBtn) {
+                addReminderBtn.addEventListener('click', () => {
+                    const user = JSON.parse(localStorage.getItem('user') || '{}');
+                    if (!user.id) return alert('Please log in.');
+                    openModal('Set Reminder', `
+                        <div class="form-group"><label>Title</label><input type="text" id="reminderTitle" placeholder="What to remind?" required></div>
+                        <div class="form-group"><label>Date & Time</label><input type="datetime-local" id="reminderDateTime" required></div>
+                        <div class="form-group"><label>Repeat</label>
+                            <select id="reminderRepeat">
+                                <option value="none">Never</option>
+                                <option value="daily">Daily</option>
+                                <option value="weekly">Weekly</option>
+                                <option value="monthly">Monthly</option>
+                            </select>
+                        </div>
+                    `, async (overlay) => {
+                        const title = overlay.querySelector('#reminderTitle').value.trim();
+                        const dateTime = overlay.querySelector('#reminderDateTime').value;
+                        const repeat = overlay.querySelector('#reminderRepeat').value;
+                        if (!title || !dateTime) { showNotification('Please fill all fields', true); return false; }
+                        try {
+                            const response = await fetch(`${API_BASE}/api/reminders`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                                body: JSON.stringify({ userId: user.id, title, reminderTime: dateTime, repeat })
+                            });
+                            if (!response.ok) throw new Error('Failed');
+                            await loadReminders();
+                            showNotification('✅ Reminder set!');
+                            return true;
+                        } catch (err) { console.error(err); showNotification('Failed to set reminder', true); return false; }
+                    });
+                });
+            }
+        
+            // Load reminders and start checking every minute
+            await loadReminders();
+            reminderCheckInterval = setInterval(checkReminders, 60000);
+            checkReminders(); // immediate check
+        
+            // Request notification permission
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+
     });
 
     // ========== HELPERS ==========
@@ -1267,6 +1314,8 @@ async function updateStats() {
                 } else if (action === 'note') {
                     const notesNav = document.querySelector('.nav-link[data-page="notes"]');
                     if (notesNav) notesNav.click();
+                } else if (action === 'reminder') {
+                    document.getElementById('addReminderBtn')?.click();
                 } else {
                     showNotification('✨ Feature coming soon!');
                 }
@@ -1603,6 +1652,119 @@ async function updateStats() {
         } catch (err) {
             console.error('Init stats error:', err);
         }
+    }
+        // ========== REMINDERS ==========
+    async function loadReminders() {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const userId = user.id;
+        if (!userId) return;
+        try {
+            const response = await fetch(`${API_BASE}/api/reminders?userId=${userId}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (!response.ok) throw new Error('Failed to fetch reminders');
+            const data = await response.json();
+            const container = document.getElementById('remindersList');
+            if (!container) return;
+            if (data.length === 0) {
+                container.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">No reminders set.</p>';
+                return;
+            }
+            container.innerHTML = data.map(r => `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 1rem; background:var(--border-light); border-radius:12px; border-left:4px solid var(--primary);">
+                    <div>
+                        <strong>${escapeHtml(r.title)}</strong>
+                        <div style="font-size:0.8rem; color:var(--text-secondary);">${new Date(r.reminder_time).toLocaleString()} ${r.repeat !== 'none' ? '🔁 ' + r.repeat : ''}</div>
+                    </div>
+                    <button class="delete-reminder" data-id="${r.id}" style="background:none; border:none; color:var(--danger); cursor:pointer;">🗑️</button>
+                </div>
+            `).join('');
+            container.querySelectorAll('.delete-reminder').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const id = parseInt(btn.dataset.id);
+                    if (!confirm('Delete this reminder?')) return;
+                    try {
+                        const user = JSON.parse(localStorage.getItem('user') || '{}');
+                        await fetch(`${API_BASE}/api/reminders/${id}`, {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                            body: JSON.stringify({ userId: user.id })
+                        });
+                        await loadReminders();
+                        showNotification('Reminder deleted');
+                    } catch (err) { console.error(err); }
+                });
+            });
+        } catch (err) { console.error('Load reminders error:', err); }
+    }
+
+    // ========== CHECK REMINDERS & PLAY SOUND ==========
+    let reminderCheckInterval = null;
+
+    function checkReminders() {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (!user.id) return;
+        fetch(`${API_BASE}/api/reminders?userId=${user.id}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        })
+        .then(res => res.json())
+        .then(reminders => {
+            const now = new Date();
+            reminders.forEach(r => {
+                const reminderTime = new Date(r.reminder_time);
+                const diff = (reminderTime - now) / 1000;
+                if (diff <= 5 && diff > -10) {
+                    triggerNotification(r.title);
+                    // Delete after trigger (simplified)
+                    fetch(`${API_BASE}/api/reminders/${r.id}`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                        body: JSON.stringify({ userId: user.id })
+                    }).then(() => loadReminders());
+                }
+            });
+        })
+        .catch(err => console.error('Check reminders error:', err));
+    }
+
+    // ========== TRIGGER NOTIFICATION WITH SOUND ==========
+    function triggerNotification(title) {
+        // Browser notification
+        if (Notification.permission === 'granted') {
+            new Notification('🔔 Reminder', { body: title, icon: '📘' });
+        } else if (Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+
+        // Play sound using Web Audio API
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.frequency.value = 880;
+            oscillator.type = 'square';
+            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.5);
+
+            setTimeout(() => {
+                const osc2 = audioCtx.createOscillator();
+                const gain2 = audioCtx.createGain();
+                osc2.connect(gain2);
+                gain2.connect(audioCtx.destination);
+                osc2.frequency.value = 660;
+                osc2.type = 'square';
+                gain2.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                osc2.start(audioCtx.currentTime);
+                osc2.stop(audioCtx.currentTime + 0.5);
+            }, 200);
+        } catch (e) { console.warn('Audio not supported', e); }
+
+        showNotification('🔔 ' + title);
     }
 
 })();

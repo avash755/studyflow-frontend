@@ -1315,3 +1315,19 @@ body {
     display: block;
     margin-top: 0.2rem;
 }
+
+/* Reminders */
+#remindersList .delete-reminder:hover {
+    background: rgba(239, 68, 68, 0.15);
+    border-radius: 50%;
+}
+
+/* Quick action button for reminder */
+.quick-action-btn[data-action="reminder"] {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+}
+.quick-action-btn[data-action="reminder"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}

@@ -50,6 +50,10 @@
             <a href="#" class="nav-link" data-page="steady">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
                 <span>Steady Mode</span></a>
+            <span class="nav-section-label">Tools</span>
+            <a href="#" class="nav-link" data-page="reminders">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                <span>Reminders</span></a>
             <a href="#" class="nav-link" data-page="notes">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
                 <span>Notes</span></a>
@@ -61,12 +65,8 @@
                     <div class="user-name" id="dashboardUserName">John Student</div>
                     <div class="user-status" style="color:var(--text-tertiary);font-size:0.8rem;">Online</div>
                 </div>
-                </div>
             </div>
-            <!-- NEW LOGOUT BUTTON -->
-            <button id="logoutBtn" class="btn btn-secondary" style="width:100%; margin-top:12px; justify-content:center;">
-                🚪 Logout
-            </button>
+            <button id="logoutBtn" class="btn btn-secondary" style="width:100%; margin-top:12px; justify-content:center;">🚪 Logout</button>
         </div>
     </nav>
 
@@ -78,8 +78,6 @@
                 <div class="header-actions">
                     <button class="btn btn-secondary" id="searchBtn" aria-label="Search">🔍 Search</button>
                     <button class="btn btn-primary" id="globalAddTask" aria-label="Add task">+ Add Task</button>
-                                
-                    <!-- NOTIFICATION BELL -->
                     <div class="notification-container" id="notificationContainer">
                         <button class="btn btn-secondary" id="notificationBell" aria-label="Notifications" style="position:relative;">
                             🔔
@@ -90,26 +88,20 @@
                                 <strong>Notifications</strong>
                                 <button id="markAllReadBtn" style="background:none; border:none; color:var(--primary); cursor:pointer; font-size:0.8rem; font-weight:600;">Mark all read</button>
                             </div>
-                            <div id="notificationList">
-                                <p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">No notifications yet</p>
-                            </div>
+                            <div id="notificationList"><p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">No notifications yet</p></div>
                         </div>
                     </div>
                 </div>
             </header>
             <div class="stats-row">
-                <div class="stat-card"><div class="stat-icon">📚</div><div><div class="stat-value">6</div><div>Active Subjects</div></div></div>
-                <div class="stat-card"><div class="stat-icon">📋</div><div><div class="stat-value">12</div><div>Pending Tasks</div></div></div>
-                <div class="stat-card"><div class="stat-icon">⏱️</div><div><div class="stat-value" id="statStudyHours">24h</div><div>Study Time</div></div></div>
-                <div class="stat-card"><div class="stat-icon">✅</div><div><div class="stat-value">85%</div><div>Completion</div></div></div>
+                <div class="stat-card"><div class="stat-icon">📚</div><div><div class="stat-value">0</div><div>Active Subjects</div></div></div>
+                <div class="stat-card"><div class="stat-icon">📋</div><div><div class="stat-value">0</div><div>Pending Tasks</div></div></div>
+                <div class="stat-card"><div class="stat-icon">⏱️</div><div><div class="stat-value" id="statStudyHours">0h</div><div>Study Time</div></div></div>
+                <div class="stat-card"><div class="stat-icon">✅</div><div><div class="stat-value">0%</div><div>Completion</div></div></div>
             </div>
             <div class="dashboard-grid">
                 <div class="content-card"><div class="card-header"><h2>📅 Upcoming Deadlines</h2><a href="#" class="card-link" data-nav="assignments">View all</a></div>
-                    <div class="deadline-list">
-                        <div class="deadline-item urgent"><div class="deadline-date"><span class="date-day">24</span><span>Apr</span></div><div class="deadline-content"><strong>Data Structures Assignment</strong><div>CS</div></div><span class="deadline-badge">2 days left</span></div>
-                        <div class="deadline-item warning"><div class="deadline-date"><span class="date-day">28</span><span>Apr</span></div><div class="deadline-content"><strong>Calculus Midterm</strong><div>Math</div></div><span class="deadline-badge">6 days left</span></div>
-                        <div class="deadline-item normal"><div class="deadline-date"><span class="date-day">03</span><span>May</span></div><div class="deadline-content"><strong>Research Paper Draft</strong><div>English</div></div><span class="deadline-badge">11 days left</span></div>
-                    </div>
+                    <div class="deadline-list" id="upcomingDeadlines"><p style="color:var(--text-tertiary);">No upcoming deadlines</p></div>
                 </div>
                 <div class="content-card"><div class="card-header"><h2>⚡ Quick Actions</h2></div>
                     <div class="quick-actions-grid">
@@ -142,9 +134,7 @@
                     <div id="badgesContainer" class="badges-container"></div>
                 </div>
                 <div class="content-card"><div class="card-header"><h2>📋 Recent Activity</h2><a href="#" id="viewAllActivities" style="font-size:0.85rem;">View all</a></div>
-                    <div class="activity-timeline" id="activityTimeline">
-                        <p style="color:var(--text-tertiary); text-align:center; padding:1rem;">Loading...</p>
-                    </div>
+                    <div class="activity-timeline" id="activityTimeline"><p style="color:var(--text-tertiary); text-align:center; padding:1rem;">Loading...</p></div>
                 </div>
             </div>
         </div>
@@ -152,14 +142,7 @@
         <!-- Subjects Page -->
         <div class="page" id="subjects-page">
             <header class="page-header"><div><h1 class="page-title">My Subjects</h1><p class="page-subtitle">Track your courses</p></div><button class="btn btn-primary" id="addSubjectBtn">+ Add Subject</button></header>
-            <div class="subjects-grid">
-                <div class="subject-card"><h3>Computer Science</h3><p>8 assignments · 24 notes</p></div>
-                <div class="subject-card"><h3>Mathematics</h3><p>6 assignments · 18 notes</p></div>
-                <div class="subject-card"><h3>Physics</h3><p>5 assignments · 15 notes</p></div>
-                <div class="subject-card"><h3>Chemistry</h3><p>7 assignments · 12 notes</p></div>
-                <div class="subject-card"><h3>English Literature</h3><p>4 assignments · 20 notes</p></div>
-                <div class="subject-card"><h3>History</h3><p>6 assignments · 16 notes</p></div>
-            </div>
+            <div class="subjects-grid" id="subjectsGrid"><p style="color:var(--text-tertiary);">Loading...</p></div>
         </div>
 
         <!-- Assignments Page -->
@@ -182,9 +165,7 @@
                     <button class="btn btn-primary" id="addClassBtn">+ Add Class</button>
                 </div>
             </header>
-            <div class="schedule-grid-wrapper">
-                <div class="schedule-grid" id="scheduleGrid"></div>
-            </div>
+            <div class="schedule-grid-wrapper"><div class="schedule-grid" id="scheduleGrid"></div></div>
             <div class="schedule-legend" id="scheduleLegend"></div>
         </div>
 
@@ -235,6 +216,19 @@
                     <div class="steady-stat"><span>🎯 Today's Focus</span><strong id="todayFocusTime">0h 0m</strong></div>
                     <div class="steady-stat"><span>🏆 Sessions</span><strong id="totalSessions">0</strong></div>
                     <div class="steady-stat"><span>🔥 Streak</span><strong id="steadyStreak">0 days</strong></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reminders Page -->
+        <div class="page" id="reminders-page">
+            <header class="page-header">
+                <div><h1 class="page-title">⏰ Reminders</h1><p class="page-subtitle">Get notified at the right time</p></div>
+                <button class="btn btn-primary" id="addReminderBtn">+ New Reminder</button>
+            </header>
+            <div class="content-card">
+                <div id="remindersList" style="display:flex; flex-direction:column; gap:0.75rem;">
+                    <p style="color:var(--text-tertiary); text-align:center;">Loading reminders...</p>
                 </div>
             </div>
         </div>
