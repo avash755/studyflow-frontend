@@ -78,6 +78,23 @@
                 <div class="header-actions">
                     <button class="btn btn-secondary" id="searchBtn" aria-label="Search">🔍 Search</button>
                     <button class="btn btn-primary" id="globalAddTask" aria-label="Add task">+ Add Task</button>
+                                
+                    <!-- NOTIFICATION BELL -->
+                    <div class="notification-container" id="notificationContainer">
+                        <button class="btn btn-secondary" id="notificationBell" aria-label="Notifications" style="position:relative;">
+                            🔔
+                            <span id="notificationBadge" style="position:absolute; top:-6px; right:-6px; background:var(--danger); color:white; border-radius:50%; padding:2px 6px; font-size:0.65rem; font-weight:700; display:none;">0</span>
+                        </button>
+                        <div class="notification-dropdown" id="notificationDropdown" style="display:none; position:absolute; right:0; top:100%; margin-top:8px; width:380px; max-height:400px; overflow-y:auto; background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow-lg); padding:1rem; z-index:300;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem; border-bottom:1px solid var(--border); padding-bottom:0.5rem;">
+                                <strong>Notifications</strong>
+                                <button id="markAllReadBtn" style="background:none; border:none; color:var(--primary); cursor:pointer; font-size:0.8rem; font-weight:600;">Mark all read</button>
+                            </div>
+                            <div id="notificationList">
+                                <p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">No notifications yet</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </header>
             <div class="stats-row">
@@ -124,11 +141,9 @@
                     <div style="margin-top:1rem;">🏆 Badges</div>
                     <div id="badgesContainer" class="badges-container"></div>
                 </div>
-                <div class="content-card"><div class="card-header"><h2>📋 Recent Activity</h2></div>
-                    <div class="activity-timeline">
-                        <div>✅ Completed Physics Lab Report <span class="activity-time">2h ago</span></div>
-                        <div>📝 Added Chemistry notes <span class="activity-time">5h ago</span></div>
-                        <div>📚 Studied Calculus 3h <span class="activity-time">Yesterday</span></div>
+                <div class="content-card"><div class="card-header"><h2>📋 Recent Activity</h2><a href="#" id="viewAllActivities" style="font-size:0.85rem;">View all</a></div>
+                    <div class="activity-timeline" id="activityTimeline">
+                        <p style="color:var(--text-tertiary); text-align:center; padding:1rem;">Loading...</p>
                     </div>
                 </div>
             </div>

@@ -1271,3 +1271,47 @@ body {
         height: 42px;
     }
 }
+
+/* Notification */
+.notification-container {
+    position: relative;
+    display: inline-block;
+}
+.notification-dropdown {
+    display: none;
+    width: 380px;
+    max-height: 400px;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    padding: 1rem;
+    z-index: 300;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: 8px;
+}
+.notification-dropdown.open {
+    display: block;
+}
+.notification-item {
+    padding: 0.6rem 0.8rem;
+    border-radius: 10px;
+    margin-bottom: 0.3rem;
+    border-left: 3px solid var(--primary);
+    background: var(--border-light);
+    font-size: 0.85rem;
+    transition: background 0.2s;
+}
+.notification-item.unread {
+    background: var(--primary-glow);
+    border-left-color: var(--primary);
+}
+.notification-item .time {
+    font-size: 0.7rem;
+    color: var(--text-tertiary);
+    display: block;
+    margin-top: 0.2rem;
+}

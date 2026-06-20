@@ -9,6 +9,128 @@ console.log('👋 Welcome,', userData.name || 'User');
 
 const API_BASE = 'https://studyflow-2kcz.onrender.com';
 
+// ========== NOTIFICATIONS / ACTIVITIES ==========
+async function loadNotifications() {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id;
+    if (!userId) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/activities?userId=${userId}&limit=10`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch activities');
+        const data = await response.json();
+
+        // Update Badge
+        const badge = document.getElementById('notificationBadge');
+        const list = document.getElementById('notificationList');
+        if (data.unreadCount > 0) {
+            badge.style.display = 'inline';
+            badge.textContent = data.unreadCount;
+        } else {
+            badge.style.display = 'none';
+        }
+
+        // Render list
+        if (data.activities.length === 0) {
+            list.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">No notifications yet</p>';
+            return;
+        }
+
+        list.innerHTML = data.activities.map(a => `
+            <div class="notification-item ${a.is_read ? '' : 'unread'}">
+                <div>${escapeHtml(a.message)}</div>
+                <span class="time">${timeAgo(a.created_at)}</span>
+            </div>
+        `).join('');
+
+    } catch (err) {
+        console.error('Load notifications error:', err);
+    }
+}
+
+// Simple "time ago" helper
+function timeAgo(dateString) {
+    const now = new Date();
+    const past = new Date(dateString);
+    const diff = Math.floor((now - past) / 1000);
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+}
+
+// Toggle dropdown
+function toggleNotifications() {
+    const dropdown = document.getElementById('notificationDropdown');
+    const isOpen = dropdown.classList.toggle('open');
+    if (isOpen) {
+        markAllRead();
+        loadNotifications();
+    }
+}
+
+// Mark all as read
+async function markAllRead() {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!user.id) return;
+    try {
+        await fetch(`${API_BASE}/api/activities/mark-all-read`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ userId: user.id })
+        });
+        const badge = document.getElementById('notificationBadge');
+        badge.style.display = 'none';
+    } catch (err) {
+        console.error('Mark all read error:', err);
+    }
+}
+
+// ========== LOAD RECENT ACTIVITIES (for Dashboard) ==========
+async function loadRecentActivities() {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id;
+    if (!userId) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/activities?userId=${userId}&limit=5`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch recent activities');
+        const data = await response.json();
+        const container = document.getElementById('activityTimeline');
+        if (!container) return;
+
+        if (data.activities.length === 0) {
+            container.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">No recent activity</p>';
+            return;
+        }
+
+        const icons = {
+            'assignment_completed': '✅',
+            'goal_completed': '🎯',
+            'subject_added': '📚',
+            'xp_earned': '⭐',
+            'study_session_complete': '🧘',
+            'account_created': '🎉'
+        };
+
+        container.innerHTML = data.activities.map(a => `
+            <div>
+                ${icons[a.type] || '📌'} ${escapeHtml(a.message)}
+                <span class="activity-time">${timeAgo(a.created_at)}</span>
+            </div>
+        `).join('');
+    } catch (err) {
+        console.error('Load recent activities error:', err);
+    }
+}
+
 // ========== UPDATE DASHBOARD STATS ==========
 async function updateStats() {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -72,7 +194,7 @@ async function updateStats() {
     selectedCalendarDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     // ========== DOM READY ==========
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         const nameEl = document.getElementById('dashboardUserName');
         if (nameEl && user.name) {
@@ -83,6 +205,11 @@ async function updateStats() {
         if (greetingEl && user.name) {
             greetingEl.textContent = `Welcome back, ${user.name}`;
         }
+
+        // Load stats, notifications, and recent activities
+        await loadStats();
+        await loadNotifications();
+        await loadRecentActivities();
 
         initNavigation();
         initDarkMode();
@@ -139,6 +266,7 @@ async function updateStats() {
 
                     loadSubjects();
                     updateStats();
+                    await loadNotifications();
                 } catch (err) {
                     console.error('Add subject error:', err);
                     alert('Could not connect to server.');
@@ -189,6 +317,7 @@ async function updateStats() {
                     const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
                     await renderAssignments(activeFilter);
                     updateStats();
+                    await loadNotifications();
                     alert('✅ Assignment added!');
                 } catch (err) {
                     console.error('Add assignment error:', err);
@@ -196,6 +325,23 @@ async function updateStats() {
                 }
             });
         }
+
+        // Notification bell toggle
+        document.getElementById('notificationBell')?.addEventListener('click', toggleNotifications);
+
+        // Click outside to close
+        document.addEventListener('click', (e) => {
+            const container = document.getElementById('notificationContainer');
+            if (container && !container.contains(e.target)) {
+                document.getElementById('notificationDropdown')?.classList.remove('open');
+            }
+        });
+
+        // Mark all read button
+        document.getElementById('markAllReadBtn')?.addEventListener('click', async () => {
+            await markAllRead();
+            await loadNotifications();
+        });
     });
 
     // ========== HELPERS ==========
