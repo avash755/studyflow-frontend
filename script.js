@@ -253,6 +253,47 @@ async function updateStats() {
         }
     });
 
+    async function loadActivity() {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id;
+    if (!userId) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/activity?userId=${userId}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch activity');
+
+        const activities = await response.json();
+        const container = document.querySelector('.activity-timeline');
+        if (!container) return;
+
+        if (activities.length === 0) {
+            container.innerHTML = '<div>No recent activity yet.</div>';
+            return;
+        }
+
+        container.innerHTML = activities.map(a => `
+            <div>
+                ${a.action} ${a.details ? `— ${a.details}` : ''}
+                <span class="activity-time">${timeAgo(a.created_at)}</span>
+            </div>
+        `).join('');
+    } catch (err) {
+        console.error('Load activity error:', err);
+    }
+}
+
+function timeAgo(dateString) {
+    const now = new Date();
+    const past = new Date(dateString);
+    const diff = Math.floor((now - past) / 1000);
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+}
+
     // ========== HELPERS ==========
     function showNotification(msg, isError = false) {
         const existing = document.querySelector('.notification');
