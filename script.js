@@ -1,3 +1,35 @@
+// ========== GLOBAL HELPERS (accessible everywhere) ==========
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    });
+}
+
+function showNotification(msg, isError = false) {
+    const existing = document.querySelector('.notification');
+    if (existing) existing.remove();
+    const div = document.createElement('div');
+    div.className = 'notification';
+    div.textContent = msg;
+    div.style.background = isError ? 'var(--danger)' : 'var(--primary)';
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 2800);
+}
+
+function timeAgo(dateString) {
+    const now = new Date();
+    const past = new Date(dateString);
+    const diff = Math.floor((now - past) / 1000);
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+}
+
 // ========== PROTECT DASHBOARD ==========
 const token = localStorage.getItem('token');
 if (!token) {
@@ -61,17 +93,6 @@ async function loadNotifications() {
         const list = document.getElementById('notificationList');
         if (list) list.innerHTML = '<p style="color:var(--danger);">Failed to load notifications.</p>';
     }
-}
-
-// Simple "time ago" helper
-function timeAgo(dateString) {
-    const now = new Date();
-    const past = new Date(dateString);
-    const diff = Math.floor((now - past) / 1000);
-    if (diff < 60) return 'Just now';
-    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
-    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-    return Math.floor(diff / 86400) + 'd ago';
 }
 
 // Toggle dropdown
@@ -193,6 +214,188 @@ async function updateStats() {
     }
 }
 
+// ========== LOAD STATS ==========
+async function loadStats() {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id;
+    if (!userId) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/stats?userId=${userId}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch stats');
+        const data = await response.json();
+        // Update global variables (they will be set later inside the IIFE)
+        // We'll store them in a temporary object and then use them inside the IIFE
+        window._statsData = data;
+        console.log('📊 Stats loaded:', data);
+    } catch (err) {
+        console.error('Load stats error:', err);
+        // Fallback: keep localStorage values
+        window._statsData = null;
+    }
+}
+
+// ========== REMINDERS (outside IIFE) ==========
+async function loadReminders() {
+    console.log('⏰ loadReminders called');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = user.id;
+    if (!userId) {
+        console.log('❌ No userId');
+        return;
+    }
+    try {
+        const response = await fetch(`${API_BASE}/api/reminders?userId=${userId}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch reminders');
+        const data = await response.json();
+        console.log('📋 Reminders loaded:', data);
+        const container = document.getElementById('remindersList');
+        if (!container) return;
+        if (data.length === 0) {
+            container.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">No reminders set.</p>';
+            return;
+        }
+        container.innerHTML = data.map(r => `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 1rem; background:var(--border-light); border-radius:12px; border-left:4px solid var(--primary);">
+                <div>
+                    <strong>${escapeHtml(r.title)}</strong>
+                    <div style="font-size:0.8rem; color:var(--text-secondary);">${new Date(r.reminder_time).toLocaleString()} ${r.repeat !== 'none' ? '🔁 ' + r.repeat : ''}</div>
+                </div>
+                <button class="delete-reminder" data-id="${r.id}" style="background:none; border:none; color:var(--danger); cursor:pointer;">🗑️</button>
+            </div>
+        `).join('');
+        container.querySelectorAll('.delete-reminder').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const id = parseInt(btn.dataset.id);
+                if (!confirm('Delete this reminder?')) return;
+                try {
+                    const user = JSON.parse(localStorage.getItem('user') || '{}');
+                    await fetch(`${API_BASE}/api/reminders/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                        body: JSON.stringify({ userId: user.id })
+                    });
+                    await loadReminders();
+                    showNotification('Reminder deleted');
+                } catch (err) { console.error(err); }
+            });
+        });
+    } catch (err) {
+        console.error('❌ Load reminders error:', err);
+        const container = document.getElementById('remindersList');
+        if (container) container.innerHTML = '<p style="color:var(--danger);">Failed to load reminders.</p>';
+    }
+}
+
+function checkReminders() {
+    console.log('⏰ checkReminders called');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!user.id) {
+        console.log('❌ No user id');
+        return;
+    }
+    fetch(`${API_BASE}/api/reminders?userId=${user.id}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    })
+    .then(res => {
+        console.log('📦 Reminders response status:', res.status);
+        if (!res.ok) throw new Error('Failed to fetch reminders');
+        return res.json();
+    })
+    .then(reminders => {
+        console.log('📋 Reminders fetched:', reminders);
+        const now = new Date();
+        reminders.forEach(r => {
+            const reminderTime = new Date(r.reminder_time);
+            const diff = (reminderTime - now) / 1000;
+            console.log(`⏳ Reminder "${r.title}" diff: ${diff}s`);
+            if (diff <= 60 && diff > -10) {
+                console.log('🚀 Triggering reminder:', r.title);
+                triggerNotification(r.title);
+                if (r.repeat === 'none') {
+                    fetch(`${API_BASE}/api/reminders/${r.id}`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                        body: JSON.stringify({ userId: user.id })
+                    }).then(() => loadReminders()).catch(console.error);
+                }
+            }
+        });
+    })
+    .catch(err => console.error('❌ Check reminders error:', err));
+}
+
+function triggerNotification(title) {
+    console.log('🔊 triggerNotification called for:', title);
+
+    if (Notification.permission === 'granted') {
+        try {
+            new Notification('🔔 Reminder', { body: title, icon: '📘' });
+            console.log('✅ Browser notification shown');
+        } catch (e) {
+            console.error('Notification error:', e);
+        }
+    } else if (Notification.permission === 'default') {
+        Notification.requestPermission().then(perm => {
+            if (perm === 'granted') {
+                new Notification('🔔 Reminder', { body: title, icon: '📘' });
+            }
+        });
+    }
+
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume().then(() => {
+                playBeep(audioCtx);
+            }).catch(e => console.warn('AudioContext resume failed:', e));
+        } else {
+            playBeep(audioCtx);
+        }
+    } catch (e) {
+        console.warn('Audio not supported', e);
+    }
+
+    showNotification('🔔 ' + title);
+}
+
+function playBeep(audioCtx) {
+    try {
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.frequency.value = 880;
+        oscillator.type = 'square';
+        gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+        oscillator.start(audioCtx.currentTime);
+        oscillator.stop(audioCtx.currentTime + 0.5);
+
+        setTimeout(() => {
+            try {
+                const osc2 = audioCtx.createOscillator();
+                const gain2 = audioCtx.createGain();
+                osc2.connect(gain2);
+                gain2.connect(audioCtx.destination);
+                osc2.frequency.value = 660;
+                osc2.type = 'square';
+                gain2.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                osc2.start(audioCtx.currentTime);
+                osc2.stop(audioCtx.currentTime + 0.5);
+            } catch (e) { /* ignore */ }
+        }, 200);
+    } catch (e) {
+        console.warn('Beep error:', e);
+    }
+}
+
+// ========== MAIN IIFE (contains all the rest) ==========
 (function() {
     // ========== GLOBAL STATE ==========
     let pomodoroInterval = null;
@@ -222,6 +425,21 @@ async function updateStats() {
     calendarYear = now.getFullYear();
     calendarMonth = now.getMonth();
     selectedCalendarDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    // Update stats from window._statsData if available
+    if (window._statsData) {
+        const s = window._statsData;
+        xp = s.xp || 0;
+        level = s.level || 1;
+        badges = JSON.parse(s.badges || '[]');
+        totalFocusSecs = s.total_focus_seconds || 0;
+        totalSteadySessions = s.total_sessions || 0;
+        streak = s.streak || 0;
+        lastDate = s.last_active_date || null;
+        // Update UI
+        updateBadgesAndXP();
+        updateSteadyStats();
+    }
 
     // ========== DOM READY ==========
     document.addEventListener('DOMContentLoaded', async () => {
@@ -423,27 +641,7 @@ async function updateStats() {
         }
     });
 
-    // ========== HELPERS ==========
-    function showNotification(msg, isError = false) {
-        const existing = document.querySelector('.notification');
-        if (existing) existing.remove();
-        const div = document.createElement('div');
-        div.className = 'notification';
-        div.textContent = msg;
-        div.style.background = isError ? 'var(--danger)' : 'var(--primary)';
-        document.body.appendChild(div);
-        setTimeout(() => div.remove(), 2800);
-    }
-
-    function escapeHtml(str) {
-        return str.replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
-        });
-    }
-
+    // ========== HELPERS (inside IIFE) ==========
     function formatDateKey(year, month, day) {
         return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     }
@@ -1638,215 +1836,6 @@ async function updateStats() {
         } catch (err) {
             console.error('Add goal error:', err);
             alert('Could not connect to server.');
-        }
-    }
-
-    // ========== LOAD STATS ==========
-    async function loadStats() {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const userId = user.id;
-        if (!userId) return;
-
-        try {
-            const response = await fetch(`${API_BASE}/api/stats?userId=${userId}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!response.ok) throw new Error('Failed to fetch stats');
-
-            const data = await response.json();
-
-            xp = data.xp || 0;
-            level = data.level || 1;
-            badges = JSON.parse(data.badges || '[]');
-            totalFocusSecs = data.total_focus_seconds || 0;
-            totalSteadySessions = data.total_sessions || 0;
-            streak = data.streak || 0;
-            lastDate = data.last_active_date || null;
-
-            updateBadgesAndXP();
-            updateSteadyStats();
-        } catch (err) {
-            console.error('Load stats error:', err);
-        }
-    }
-
-    async function initStats(userId) {
-        try {
-            await fetch(`${API_BASE}/api/stats/init`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({ userId })
-            });
-            await loadStats();
-        } catch (err) {
-            console.error('Init stats error:', err);
-        }
-    }
-
-    // ========== REMINDERS ==========
-    async function loadReminders() {
-        console.log('⏰ loadReminders called');
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const userId = user.id;
-        if (!userId) {
-            console.log('❌ No userId');
-            return;
-        }
-        try {
-            const response = await fetch(`${API_BASE}/api/reminders?userId=${userId}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!response.ok) throw new Error('Failed to fetch reminders');
-            const data = await response.json();
-            console.log('📋 Reminders loaded:', data);
-            const container = document.getElementById('remindersList');
-            if (!container) return;
-            if (data.length === 0) {
-                container.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">No reminders set.</p>';
-                return;
-            }
-            container.innerHTML = data.map(r => `
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 1rem; background:var(--border-light); border-radius:12px; border-left:4px solid var(--primary);">
-                    <div>
-                        <strong>${escapeHtml(r.title)}</strong>
-                        <div style="font-size:0.8rem; color:var(--text-secondary);">${new Date(r.reminder_time).toLocaleString()} ${r.repeat !== 'none' ? '🔁 ' + r.repeat : ''}</div>
-                    </div>
-                    <button class="delete-reminder" data-id="${r.id}" style="background:none; border:none; color:var(--danger); cursor:pointer;">🗑️</button>
-                </div>
-            `).join('');
-            container.querySelectorAll('.delete-reminder').forEach(btn => {
-                btn.addEventListener('click', async () => {
-                    const id = parseInt(btn.dataset.id);
-                    if (!confirm('Delete this reminder?')) return;
-                    try {
-                        const user = JSON.parse(localStorage.getItem('user') || '{}');
-                        await fetch(`${API_BASE}/api/reminders/${id}`, {
-                            method: 'DELETE',
-                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                            body: JSON.stringify({ userId: user.id })
-                        });
-                        await loadReminders();
-                        showNotification('Reminder deleted');
-                    } catch (err) { console.error(err); }
-                });
-            });
-        } catch (err) {
-            console.error('❌ Load reminders error:', err);
-            const container = document.getElementById('remindersList');
-            if (container) container.innerHTML = '<p style="color:var(--danger);">Failed to load reminders.</p>';
-        }
-    }
-
-    // ========== CHECK REMINDERS & PLAY SOUND ==========
-    function checkReminders() {
-        console.log('⏰ checkReminders called');
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        if (!user.id) {
-            console.log('❌ No user id');
-            return;
-        }
-        fetch(`${API_BASE}/api/reminders?userId=${user.id}`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        })
-        .then(res => {
-            console.log('📦 Reminders response status:', res.status);
-            if (!res.ok) throw new Error('Failed to fetch reminders');
-            return res.json();
-        })
-        .then(reminders => {
-            console.log('📋 Reminders fetched:', reminders);
-            const now = new Date();
-            reminders.forEach(r => {
-                const reminderTime = new Date(r.reminder_time);
-                const diff = (reminderTime - now) / 1000; // seconds
-                console.log(`⏳ Reminder "${r.title}" diff: ${diff}s`);
-                // Trigger if within the next 60 seconds or just past (within 10 seconds)
-                if (diff <= 60 && diff > -10) {
-                    console.log('🚀 Triggering reminder:', r.title);
-                    triggerNotification(r.title);
-                    if (r.repeat === 'none') {
-                        fetch(`${API_BASE}/api/reminders/${r.id}`, {
-                            method: 'DELETE',
-                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                            body: JSON.stringify({ userId: user.id })
-                        }).then(() => loadReminders()).catch(console.error);
-                    }
-                }
-            });
-        })
-        .catch(err => console.error('❌ Check reminders error:', err));
-    }
-
-    // ========== TRIGGER NOTIFICATION WITH SOUND ==========
-    function triggerNotification(title) {
-        console.log('🔊 triggerNotification called for:', title);
-
-        // 1. Browser notification
-        if (Notification.permission === 'granted') {
-            try {
-                new Notification('🔔 Reminder', { body: title, icon: '📘' });
-                console.log('✅ Browser notification shown');
-            } catch (e) {
-                console.error('Notification error:', e);
-            }
-        } else if (Notification.permission === 'default') {
-            Notification.requestPermission().then(perm => {
-                if (perm === 'granted') {
-                    new Notification('🔔 Reminder', { body: title, icon: '📘' });
-                }
-            });
-        }
-
-        // 2. Play sound using Web Audio API
-        try {
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume().then(() => {
-                    playBeep(audioCtx);
-                }).catch(e => console.warn('AudioContext resume failed:', e));
-            } else {
-                playBeep(audioCtx);
-            }
-        } catch (e) {
-            console.warn('Audio not supported', e);
-        }
-
-        // 3. Show a toast notification on the page
-        showNotification('🔔 ' + title);
-    }
-
-    function playBeep(audioCtx) {
-        try {
-            const oscillator = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-            oscillator.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            oscillator.frequency.value = 880;
-            oscillator.type = 'square';
-            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-            oscillator.start(audioCtx.currentTime);
-            oscillator.stop(audioCtx.currentTime + 0.5);
-
-            setTimeout(() => {
-                try {
-                    const osc2 = audioCtx.createOscillator();
-                    const gain2 = audioCtx.createGain();
-                    osc2.connect(gain2);
-                    gain2.connect(audioCtx.destination);
-                    osc2.frequency.value = 660;
-                    osc2.type = 'square';
-                    gain2.gain.setValueAtTime(0.3, audioCtx.currentTime);
-                    gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-                    osc2.start(audioCtx.currentTime);
-                    osc2.stop(audioCtx.currentTime + 0.5);
-                } catch (e) { /* ignore */ }
-            }, 200);
-        } catch (e) {
-            console.warn('Beep error:', e);
         }
     }
 
