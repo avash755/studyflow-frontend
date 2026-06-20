@@ -1,111 +1,209 @@
-// ========== FORGOT PASSWORD ==========
-const crypto = require('crypto');
-const { Resend } = require('resend');
-
-// Initialize Resend (if API key is set)
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-
-router.post('/forgot', async (req, res) => {
-    const { email } = req.body;
-
-    if (!email) {
-        return res.status(400).json({ error: 'Email is required' });
-    }
-
-    try {
-        // 1. Check if user exists
-        const userResult = await db.query('SELECT id, email FROM users WHERE email = $1', [email]);
-        if (userResult.rows.length === 0) {
-            // For security, don't reveal if email exists or not
-            return res.json({ message: 'If an account exists, a reset link has been sent.' });
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forgot Password · StudyFlow</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #4f46e5;
+            --primary-light: #6366f1;
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --border: #e2e8f0;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-tertiary: #94a3b8;
+            --shadow-md: 0 4px 20px rgba(0,0,0,0.08);
+            --font-body: 'DM Sans', sans-serif;
+            --font-display: 'Crimson Pro', serif;
+            --radius: 20px;
         }
-
-        const user = userResult.rows[0];
-
-        // 2. Generate a secure random token
-        const token = crypto.randomBytes(32).toString('hex');
-        const expiresAt = new Date(Date.now() + 3600000); // 1 hour from now
-
-        // 3. Delete any old reset tokens for this user
-        await db.query('DELETE FROM password_resets WHERE user_id = $1', [user.id]);
-
-        // 4. Store the new token
-        await db.query(
-            'INSERT INTO password_resets (user_id, token, expires_at) VALUES ($1, $2, $3)',
-            [user.id, token, expiresAt]
-        );
-
-        // 5. Send email (if Resend is configured)
-        if (resend) {
-            const resetLink = `${process.env.FRONTEND_URL}/reset.html?token=${token}`;
-
-            await resend.emails.send({
-                from: 'StudyFlow <noreply@yourdomain.com>', // You'll need to verify a domain in Resend
-                to: [email],
-                subject: 'Reset Your StudyFlow Password',
-                html: `
-                    <h2>Reset Your Password</h2>
-                    <p>You requested a password reset for your StudyFlow account.</p>
-                    <p>Click the link below to reset your password (valid for 1 hour):</p>
-                    <a href="${resetLink}" style="display:inline-block;padding:12px 24px;background:#4f46e5;color:white;border-radius:8px;text-decoration:none;">Reset Password</a>
-                    <p>If you didn't request this, ignore this email.</p>
-                    <p>This link will expire in 1 hour.</p>
-                `
-            });
-        } else {
-            console.warn('⚠️ Resend API key not set. Email not sent.');
-            // For development, log the link
-            console.log(`🔗 Reset link (dev): ${process.env.FRONTEND_URL}/reset.html?token=${token}`);
+        body {
+            font-family: var(--font-body);
+            background: var(--bg);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
         }
-
-        res.json({ message: 'If an account exists, a reset link has been sent.' });
-
-    } catch (err) {
-        console.error('Forgot password error:', err);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// ========== RESET PASSWORD ==========
-router.post('/reset', async (req, res) => {
-    const { token, password } = req.body;
-
-    if (!token || !password) {
-        return res.status(400).json({ error: 'Token and password are required' });
-    }
-    if (password.length < 6) {
-        return res.status(400).json({ error: 'Password must be at least 6 characters' });
-    }
-
-    try {
-        // 1. Find the token
-        const tokenResult = await db.query(
-            'SELECT * FROM password_resets WHERE token = $1 AND expires_at > NOW()',
-            [token]
-        );
-
-        if (tokenResult.rows.length === 0) {
-            return res.status(400).json({ error: 'Invalid or expired reset token' });
+        .auth-card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-md);
+            padding: 2.5rem 2.2rem;
+            width: 100%;
+            max-width: 440px;
+            border: 1px solid var(--border);
         }
+        .auth-card .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            justify-content: center;
+            margin-bottom: 1.8rem;
+        }
+        .auth-card .logo-icon {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+        .auth-card .logo-text {
+            font-family: var(--font-display);
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        .auth-card h2 {
+            font-family: var(--font-display);
+            font-size: 1.6rem;
+            text-align: center;
+            margin-bottom: 0.2rem;
+        }
+        .auth-card .subtitle {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 1.8rem;
+        }
+        .form-group { margin-bottom: 1.2rem; }
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            font-size: 0.85rem;
+            margin-bottom: 0.3rem;
+            color: var(--text-secondary);
+        }
+        .form-group input {
+            width: 100%;
+            padding: 0.7rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            font-size: 1rem;
+            background: var(--bg);
+            color: var(--text-primary);
+            transition: border 0.2s, box-shadow 0.2s;
+            font-family: var(--font-body);
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+        }
+        .btn-primary {
+            width: 100%;
+            padding: 0.8rem;
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            border: none;
+            border-radius: 40px;
+            color: white;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-family: var(--font-body);
+            margin-top: 0.5rem;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(79, 70, 229, 0.3);
+        }
+        .alert {
+            padding: 0.7rem 1rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
+        .alert-success { background: #dcfce7; color: #166534; display: block; }
+        .alert-error { background: #fee2e2; color: #b91c1c; display: block; }
+        .back-link {
+            text-align: center;
+            margin-top: 1.5rem;
+            font-size: 0.9rem;
+        }
+        .back-link a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .back-link a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="auth-card">
+        <div class="logo">
+            <div class="logo-icon">📘</div>
+            <span class="logo-text">StudyFlow</span>
+        </div>
 
-        const resetEntry = tokenResult.rows[0];
+        <h2>Reset Password</h2>
+        <p class="subtitle">Enter your email and we'll send you a reset link</p>
 
-        // 2. Hash the new password
-        const passwordHash = await bcrypt.hash(password, 10);
+        <div id="alertMessage" class="alert"></div>
 
-        // 3. Update the user's password
-        await db.query(
-            'UPDATE users SET password_hash = $1 WHERE id = $2',
-            [passwordHash, resetEntry.user_id]
-        );
+        <div class="form-group">
+            <label for="resetEmail">Email address</label>
+            <input type="email" id="resetEmail" placeholder="you@example.com">
+        </div>
 
-        // 4. Delete all reset tokens for this user
-        await db.query('DELETE FROM password_resets WHERE user_id = $1', [resetEntry.user_id]);
+        <button class="btn-primary" id="sendResetBtn">Send Reset Link</button>
 
-        res.json({ message: 'Password reset successful! You can now log in.' });
+        <div class="back-link">
+            <a href="login.html">← Back to Login</a>
+        </div>
+    </div>
 
-    } catch (err) {
-        console.error('Reset password error:', err);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
+    <script>
+        const API_BASE = 'https://studyflow-2kcz.onrender.com';
+
+        document.getElementById('sendResetBtn').addEventListener('click', async () => {
+            const email = document.getElementById('resetEmail').value.trim();
+            const alert = document.getElementById('alertMessage');
+
+            if (!email) {
+                alert.className = 'alert alert-error';
+                alert.textContent = 'Please enter your email address.';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/forgot`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+
+                const data = await response.json();
+
+                alert.className = 'alert alert-success';
+                alert.textContent = data.message || 'If an account exists, a reset link has been sent.';
+
+                document.getElementById('resetEmail').value = '';
+
+            } catch (err) {
+                alert.className = 'alert alert-error';
+                alert.textContent = 'Could not connect to server. Please try again.';
+                console.error(err);
+            }
+        });
+
+        document.getElementById('resetEmail').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') document.getElementById('sendResetBtn').click();
+        });
+    </script>
+</body>
+</html>
