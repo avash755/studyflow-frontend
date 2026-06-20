@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset Password · StudyFlow</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #4f46e5;
+            --primary-light: #6366f1;
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --border: #e2e8f0;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-tertiary: #94a3b8;
+            --shadow-md: 0 4px 20px rgba(0,0,0,0.08);
+            --font-body: 'DM Sans', sans-serif;
+            --font-display: 'Crimson Pro', serif;
+            --radius: 20px;
+            --success: #10b981;
+            --danger: #ef4444;
+        }
+        body {
+            font-family: var(--font-body);
+            background: var(--bg);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+        }
+        .auth-card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-md);
+            padding: 2.5rem 2.2rem;
+            width: 100%;
+            max-width: 440px;
+            border: 1px solid var(--border);
+        }
+        .auth-card .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            justify-content: center;
+            margin-bottom: 1.8rem;
+        }
+        .auth-card .logo-icon {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+        .auth-card .logo-text {
+            font-family: var(--font-display);
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        .auth-card h2 {
+            font-family: var(--font-display);
+            font-size: 1.6rem;
+            text-align: center;
+            margin-bottom: 0.2rem;
+        }
+        .auth-card .subtitle {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 1.8rem;
+        }
+        .form-group { margin-bottom: 1.2rem; }
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            font-size: 0.85rem;
+            margin-bottom: 0.3rem;
+            color: var(--text-secondary);
+        }
+        .form-group input {
+            width: 100%;
+            padding: 0.7rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            font-size: 1rem;
+            background: var(--bg);
+            color: var(--text-primary);
+            transition: border 0.2s, box-shadow 0.2s;
+            font-family: var(--font-body);
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+        }
+        .btn-primary {
+            width: 100%;
+            padding: 0.8rem;
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            border: none;
+            border-radius: 40px;
+            color: white;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-family: var(--font-body);
+            margin-top: 0.5rem;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(79, 70, 229, 0.3);
+        }
+        .alert {
+            padding: 0.7rem 1rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
+        .alert-success { background: #dcfce7; color: #166534; display: block; }
+        .alert-error { background: #fee2e2; color: #b91c1c; display: block; }
+        .back-link {
+            text-align: center;
+            margin-top: 1.5rem;
+            font-size: 0.9rem;
+        }
+        .back-link a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .back-link a:hover { text-decoration: underline; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="auth-card">
+        <div class="logo">
+            <div class="logo-icon">📘</div>
+            <span class="logo-text">StudyFlow</span>
+        </div>
+
+        <div id="formContainer">
+            <h2>Create New Password</h2>
+            <p class="subtitle">Enter your new password below</p>
+
+            <div id="alertMessage" class="alert"></div>
+
+            <div class="form-group">
+                <label for="newPassword">New Password</label>
+                <input type="password" id="newPassword" placeholder="Min 6 characters">
+            </div>
+            <div class="form-group">
+                <label for="confirmPassword">Confirm Password</label>
+                <input type="password" id="confirmPassword" placeholder="Confirm your new password">
+            </div>
+
+            <button class="btn-primary" id="resetPasswordBtn">Reset Password</button>
+
+            <div class="back-link">
+                <a href="login.html">← Back to Login</a>
+            </div>
+        </div>
+
+        <div id="successContainer" class="hidden">
+            <h2>✅ Password Reset!</h2>
+            <p class="subtitle">Your password has been successfully updated.</p>
+            <a href="login.html" class="btn-primary" style="display:block;text-align:center;text-decoration:none;margin-top:1.5rem;">Log In</a>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://studyflow-2kcz.onrender.com';
+
+        // Get token from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const resetToken = urlParams.get('token');
+
+        if (!resetToken) {
+            document.getElementById('alertMessage').className = 'alert alert-error';
+            document.getElementById('alertMessage').textContent = 'Invalid or missing reset token. Please request a new link.';
+            document.getElementById('resetPasswordBtn').disabled = true;
+        }
+
+        document.getElementById('resetPasswordBtn').addEventListener('click', async () => {
+            const password = document.getElementById('newPassword').value.trim();
+            const confirm = document.getElementById('confirmPassword').value.trim();
+            const alert = document.getElementById('alertMessage');
+
+            if (!password || !confirm) {
+                alert.className = 'alert alert-error';
+                alert.textContent = 'Please fill in both password fields.';
+                return;
+            }
+
+            if (password.length < 6) {
+                alert.className = 'alert alert-error';
+                alert.textContent = 'Password must be at least 6 characters.';
+                return;
+            }
+
+            if (password !== confirm) {
+                alert.className = 'alert alert-error';
+                alert.textContent = 'Passwords do not match.';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/reset`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token: resetToken,
+                        password: password
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert.className = 'alert alert-error';
+                    alert.textContent = data.error || 'Failed to reset password.';
+                    return;
+                }
+
+                // Success!
+                document.getElementById('formContainer').classList.add('hidden');
+                document.getElementById('successContainer').classList.remove('hidden');
+
+            } catch (err) {
+                alert.className = 'alert alert-error';
+                alert.textContent = 'Could not connect to server. Please try again.';
+                console.error(err);
+            }
+        });
+
+        // Enter key support
+        document.getElementById('newPassword').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') document.getElementById('resetPasswordBtn').click();
+        });
+        document.getElementById('confirmPassword').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') document.getElementById('resetPasswordBtn').click();
+        });
+    </script>
+</body>
+</html>
