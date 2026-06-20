@@ -1052,7 +1052,10 @@
                     // Store the token and user data
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', JSON.stringify(data.user));
-                
+                    
+                    // Initialize stats for this user
+                    await initStats(data.user.id);
+
                     // If "Remember Me" is checked, we could set a longer expiry, but we already have 7d from JWT.
                     // So we just save it.
                 
