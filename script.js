@@ -313,8 +313,10 @@ function checkReminders() {
             const reminderTime = new Date(r.reminder_time);
             const diff = (reminderTime - now) / 1000;
             console.log(`⏳ Reminder "${r.title}" diff: ${diff}s`);
+            // Trigger if within 60 seconds ahead or 10 seconds past
             if (diff <= 60 && diff > -10) {
                 console.log('🚀 Triggering reminder:', r.title);
+                // Call the updated triggerNotification (now async, but we don't await)
                 triggerNotification(r.title);
                 if (r.repeat === 'none') {
                     fetch(`${API_BASE}/api/reminders/${r.id}`, {
@@ -329,9 +331,34 @@ function checkReminders() {
     .catch(err => console.error('❌ Check reminders error:', err));
 }
 
-function triggerNotification(title) {
+async function triggerNotification(title) {
     console.log('🔊 triggerNotification called for:', title);
 
+    // 1. Log this reminder trigger as an activity (so it appears in bell dropdown)
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    if (user.id) {
+        try {
+            await fetch(`${API_BASE}/api/activities`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    userId: user.id,
+                    type: 'reminder_triggered',
+                    message: `🔔 Reminder: "${title}"`,
+                    metadata: { reminder_title: title }
+                })
+            });
+            // Refresh notifications to show the new activity
+            await loadNotifications();
+        } catch (e) {
+            console.warn('Failed to log reminder activity:', e);
+        }
+    }
+
+    // 2. Browser notification
     if (Notification.permission === 'granted') {
         try {
             new Notification('🔔 Reminder', { body: title, icon: '📘' });
@@ -340,26 +367,24 @@ function triggerNotification(title) {
             console.error('Notification error:', e);
         }
     } else if (Notification.permission === 'default') {
-        Notification.requestPermission().then(perm => {
-            if (perm === 'granted') {
-                new Notification('🔔 Reminder', { body: title, icon: '📘' });
-            }
-        });
+        const perm = await Notification.requestPermission();
+        if (perm === 'granted') {
+            new Notification('🔔 Reminder', { body: title, icon: '📘' });
+        }
     }
 
+    // 3. Play sound
     try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx.state === 'suspended') {
-            audioCtx.resume().then(() => {
-                playBeep(audioCtx);
-            }).catch(e => console.warn('AudioContext resume failed:', e));
-        } else {
-            playBeep(audioCtx);
+            await audioCtx.resume();
         }
+        playBeep(audioCtx);
     } catch (e) {
         console.warn('Audio not supported', e);
     }
 
+    // 4. Show toast on page
     showNotification('🔔 ' + title);
 }
 
@@ -639,6 +664,16 @@ function playBeep(audioCtx) {
                 console.log('🔔 Notification permission:', perm);
             });
         }
+
+        // Resume audio context on any user click (required for sound)
+        document.addEventListener('click', () => {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                if (ctx.state === 'suspended') {
+                    ctx.resume();
+                }
+            } catch (e) { /* ignore */ }
+        }, { once: false });
     });
 
     // ========== HELPERS (inside IIFE) ==========
