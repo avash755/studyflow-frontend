@@ -16,7 +16,6 @@ async function updateStats() {
     if (!userId) return;
 
     try {
-        // ---------- UPDATE ACTIVE SUBJECTS (Stat 1) ----------
         const subRes = await fetch(`${API_BASE}/api/subjects?userId=${userId}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
@@ -28,7 +27,6 @@ async function updateStats() {
             }
         }
 
-        // ---------- UPDATE PENDING ASSIGNMENTS (Stat 2) ----------
         const assignRes = await fetch(`${API_BASE}/api/assignments?userId=${userId}&filter=pending`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
@@ -39,7 +37,6 @@ async function updateStats() {
                 statValues[1].textContent = pendingAssignments.length;
             }
         }
-
     } catch (err) {
         console.error('Failed to update stats:', err);
     }
@@ -74,58 +71,8 @@ async function updateStats() {
     calendarMonth = now.getMonth();
     selectedCalendarDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    // ========== LOAD USER STATS ==========
-    async function loadStats() {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const userId = user.id;
-        if (!userId) return;
-
-        try {
-            const response = await fetch(`${API_BASE}/api/stats?userId=${userId}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!response.ok) throw new Error('Failed to fetch stats');
-
-            const data = await response.json();
-            
-            // Update global variables
-            xp = data.xp || 0;
-            level = data.level || 1;
-            badges = JSON.parse(data.badges || '[]');
-            totalFocusSecs = data.total_focus_seconds || 0;
-            totalSteadySessions = data.total_sessions || 0;
-            streak = data.streak || 0;
-            lastDate = data.last_active_date || null;
-
-            // Update UI
-            updateBadgesAndXP();
-            updateSteadyStats();
-
-        } catch (err) {
-            console.error('Load stats error:', err);
-            // If fails, fallback to localStorage values (already set)
-        }
-    }
-
-    async function initStats(userId) {
-        try {
-            await fetch(`${API_BASE}/api/stats/init`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({ userId })
-            });
-            // Reload stats after initialization
-            await loadStats();
-        } catch (err) {
-            console.error('Init stats error:', err);
-        }
-    }
-
     // ========== DOM READY ==========
-    document.addEventListener('DOMContentLoaded', async () => {
+    document.addEventListener('DOMContentLoaded', () => {
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         const nameEl = document.getElementById('dashboardUserName');
         if (nameEl && user.name) {
@@ -142,7 +89,6 @@ async function updateStats() {
         initHamburger();
         initPomodoro();
         initGoals();
-        await loadStats();        // Load stats from DB before gamification
         initGamification();
         initAssignments();
         initCalendar();
@@ -244,7 +190,6 @@ async function updateStats() {
                     await renderAssignments(activeFilter);
                     updateStats();
                     alert('✅ Assignment added!');
-
                 } catch (err) {
                     console.error('Add assignment error:', err);
                     alert('Could not connect to server.');
@@ -252,47 +197,6 @@ async function updateStats() {
             });
         }
     });
-
-    async function loadActivity() {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const userId = user.id;
-    if (!userId) return;
-
-    try {
-        const response = await fetch(`${API_BASE}/api/activity?userId=${userId}`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        if (!response.ok) throw new Error('Failed to fetch activity');
-
-        const activities = await response.json();
-        const container = document.querySelector('.activity-timeline');
-        if (!container) return;
-
-        if (activities.length === 0) {
-            container.innerHTML = '<div>No recent activity yet.</div>';
-            return;
-        }
-
-        container.innerHTML = activities.map(a => `
-            <div>
-                ${a.action} ${a.details ? `— ${a.details}` : ''}
-                <span class="activity-time">${timeAgo(a.created_at)}</span>
-            </div>
-        `).join('');
-    } catch (err) {
-        console.error('Load activity error:', err);
-    }
-}
-
-function timeAgo(dateString) {
-    const now = new Date();
-    const past = new Date(dateString);
-    const diff = Math.floor((now - past) / 1000);
-    if (diff < 60) return 'Just now';
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    return `${Math.floor(diff / 86400)}d ago`;
-}
 
     // ========== HELPERS ==========
     function showNotification(msg, isError = false) {
@@ -498,106 +402,53 @@ function timeAgo(dateString) {
     }
 
     // ========== GOALS & XP ==========
-    // We keep the old renderGoals only for backward compatibility,
-    // but it will be overwritten by the async version below.
-    // We'll define the async renderGoals later.
+    function saveGoals() { localStorage.setItem('goals', JSON.stringify(goals));
+        renderGoals();
+        updateBadgesAndXP(); }
+
+    function renderGoals() {
+        const container = document.getElementById('goalsList');
+        if (!container) return;
+        if (!goals.length) { container.innerHTML =
+                '<p style="color:var(--text-tertiary)">✨ Add your first goal!</p>'; return; }
+        container.innerHTML = goals.map((g, idx) => `
+            <div class="goal-item">
+                <input type="checkbox" class="goal-check" data-idx="${idx}" ${g.done?'checked':''} aria-label="Complete goal">
+                <span style="flex:1;${g.done?'text-decoration:line-through;opacity:0.6':''}">${escapeHtml(g.text)}</span>
+                <button class="del-goal" data-idx="${idx}" aria-label="Delete goal">🗑️</button>
+            </div>`).join('');
+        container.querySelectorAll('.goal-check').forEach(cb => {
+            cb.addEventListener('change', (e) => {
+                const i = parseInt(e.target.dataset.idx);
+                goals[i].done = e.target.checked;
+                saveGoals();
+                if (e.target.checked) addXP(5);
+            });
+        });
+        container.querySelectorAll('.del-goal').forEach(btn => {
+            btn.addEventListener('click', () => { goals.splice(parseInt(btn.dataset.idx), 1);
+                saveGoals(); });
+        });
+    }
 
     function addGoal() {
         const input = document.getElementById('newGoalInput');
         const text = input.value.trim();
-        if (text) {
-            // Push to local array for immediate feedback, but the API will handle persistence
-            goals.push({ text, done: false });
-            renderGoals(); // use the async version
-            input.value = '';
-        }
+        if (text) { goals.push({ text, done: false });
+            saveGoals();
+            input.value = ''; }
     }
 
-    async function addXP(amount) {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const userId = user.id;
-        if (!userId) {
-            // Fallback to localStorage if offline
-            xp += amount;
-            let needed = level * 100;
-            while (xp >= needed) {
-                xp -= needed;
-                level++;
-                showNotification(`🎉 LEVEL UP! You reached Level ${level}! 🎉`);
-                needed = level * 100;
-            }
-            localStorage.setItem('xp', xp);
-            localStorage.setItem('level', level);
-            updateBadgesAndXP();
-            return;
-        }
-
-        try {
-            // Compute badges on the frontend
-            let newXp = xp + amount;
-            let newLevel = level;
-            let newBadges = [...badges];
-
-            let needed = newLevel * 100;
-            while (newXp >= needed) {
-                newXp -= needed;
-                newLevel++;
-                showNotification(`🎉 LEVEL UP! You reached Level ${newLevel}! 🎉`);
-                needed = newLevel * 100;
-            }
-
-            // Check for new badges
-            if (newLevel >= 2 && !newBadges.find(b => b.name === 'Rising Star')) {
-                newBadges.push({ name: 'Rising Star', icon: '⭐' });
-                showNotification('🏅 Badge unlocked: Rising Star!');
-            }
-            if (newLevel >= 5 && !newBadges.find(b => b.name === 'Scholar')) {
-                newBadges.push({ name: 'Scholar', icon: '📚' });
-                showNotification('🏅 Badge unlocked: Scholar!');
-            }
-
-            // Update server
-            const response = await fetch(`${API_BASE}/api/stats`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({
-                    userId: user.id,
-                    xpToAdd: amount,
-                    badges: newBadges
-                })
-            });
-
-            if (!response.ok) throw new Error('Failed to update XP');
-
-            const data = await response.json();
-            
-            // Update global state
-            xp = data.xp;
-            level = data.level;
-            badges = data.badges;
-            localStorage.setItem('xp', xp);
-            localStorage.setItem('level', level);
-
-            updateBadgesAndXP();
-
-        } catch (err) {
-            console.error('Add XP error:', err);
-            // Fallback: update locally
-            xp += amount;
-            let needed = level * 100;
-            while (xp >= needed) {
-                xp -= needed;
-                level++;
-                showNotification(`🎉 LEVEL UP! You reached Level ${level}! 🎉`);
-                needed = level * 100;
-            }
-            localStorage.setItem('xp', xp);
-            localStorage.setItem('level', level);
-            updateBadgesAndXP();
-        }
+    function addXP(amount) {
+        xp += amount;
+        let needed = level * 100;
+        while (xp >= needed) { xp -= needed;
+            level++;
+            showNotification(`🎉 LEVEL UP! You reached Level ${level}! 🎉`);
+            needed = level * 100; }
+        localStorage.setItem('xp', xp);
+        localStorage.setItem('level', level);
+        updateBadgesAndXP();
     }
 
     function updateBadgesAndXP() {
@@ -610,16 +461,13 @@ function timeAgo(dateString) {
         if (levelEl) levelEl.innerText = `Level ${level}`;
         if (level >= 2 && !badges.find(b => b.name === 'Rising Star')) {
             badges.push({ name: 'Rising Star', icon: '⭐' });
-            showNotification('🏅 Badge unlocked: Rising Star!');
-        }
+            showNotification('🏅 Badge unlocked: Rising Star!'); }
         if (level >= 5 && !badges.find(b => b.name === 'Scholar')) {
             badges.push({ name: 'Scholar', icon: '📚' });
-            showNotification('🏅 Badge unlocked: Scholar!');
-        }
+            showNotification('🏅 Badge unlocked: Scholar!'); }
         if (goals.filter(g => g.done).length >= 5 && !badges.find(b => b.name === 'Goal Getter')) {
             badges.push({ name: 'Goal Getter', icon: '🎯' });
-            showNotification('🏅 Badge unlocked: Goal Getter!');
-        }
+            showNotification('🏅 Badge unlocked: Goal Getter!'); }
         localStorage.setItem('badges', JSON.stringify(badges));
         const bd = document.getElementById('badgesContainer');
         if (bd) bd.innerHTML = badges.map(b => `<span>${b.icon} ${b.name}</span>`).join('');
@@ -630,7 +478,7 @@ function timeAgo(dateString) {
         const input = document.getElementById('newGoalInput');
         if (addBtn) addBtn.addEventListener('click', addGoal);
         if (input) input.addEventListener('keypress', (e) => { if (e.key === 'Enter') addGoal(); });
-        renderGoals(); // async version will be defined later
+        renderGoals();
     }
 
     function initGamification() { updateBadgesAndXP(); }
@@ -639,8 +487,6 @@ function timeAgo(dateString) {
     function saveAssignments() { localStorage.setItem('assignmentsData', JSON.stringify(assignmentsData)); }
 
     function renderAssignments(filter = "all") {
-        // This is the old synchronous version; we'll replace it with async later.
-        // But we keep it for compatibility, then override.
         const container = document.getElementById('assignmentsList');
         if (!container) return;
         const filtered = assignmentsData.filter(a => filter === 'all' ? true : (filter === 'completed' ? a
@@ -830,7 +676,6 @@ function timeAgo(dateString) {
 
             await renderCalendar();
             showNotification('Event deleted');
-
         } catch (err) {
             console.error('Delete event error:', err);
             alert('Failed to delete event.');
@@ -918,7 +763,6 @@ function timeAgo(dateString) {
                             await renderCalendar();
                             showNotification('✅ Event added!');
                             return true;
-
                         } catch (err) {
                             console.error('Add event error:', err);
                             showNotification('Could not connect to server.', true);
@@ -1093,7 +937,6 @@ function timeAgo(dateString) {
                             await renderSchedule();
                             showNotification('✅ Class added!');
                             return true;
-
                         } catch (err) {
                             console.error('Add class error:', err);
                             showNotification('Could not connect to server.', true);
@@ -1129,7 +972,6 @@ function timeAgo(dateString) {
 
                     await renderSchedule();
                     showNotification('🔄 Schedule reset to default');
-
                 } catch (err) {
                     console.error('Reset schedule error:', err);
                     showNotification('Could not connect to server.', true);
@@ -1165,115 +1007,44 @@ function timeAgo(dateString) {
             updateSteadyDisplay(); }
     }
 
-    async function startSteady() {
+    function startSteady() {
         if (steadyTimer) clearInterval(steadyTimer);
-
-        steadyTimer = setInterval(async () => {
-            if (steadyTimeLeft > 0) {
-                steadyTimeLeft--;
-                updateSteadyDisplay();
-            } else {
-                // Timer hit zero – session complete
+        steadyTimer = setInterval(() => {
+            if (steadyTimeLeft > 0) { steadyTimeLeft--;
+                updateSteadyDisplay(); } else {
                 clearInterval(steadyTimer);
                 steadyTimer = null;
-
                 if (isSteadyStudy) {
-                    // ---------- STUDY SESSION COMPLETE ----------
                     showNotification('✅ Study session complete! +15 XP');
-
-                    // 1. Add XP (15 points) – this updates the database
-                    await addXP(15);
-
-                    // 2. Update focus time, sessions, and streak in the database
-                    const user = JSON.parse(localStorage.getItem('user') || '{}');
-                    if (user.id) {
-                        try {
-                            const response = await fetch(`${API_BASE}/api/stats`, {
-                                method: 'PUT',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                                },
-                                body: JSON.stringify({
-                                    userId: user.id,
-                                    sessionTime: studySecs,
-                                    sessionIncrement: true,
-                                    streakUpdate: true
-                                })
-                            });
-
-                            if (response.ok) {
-                                const data = await response.json();
-                                totalFocusSecs = data.total_focus_seconds;
-                                totalSteadySessions = data.total_sessions;
-                                streak = data.streak;
-                                updateSteadyStats();
-                            } else {
-                                // If API fails, fallback to localStorage
-                                console.warn('Steady stats API failed, using localStorage fallback');
-                                totalFocusSecs += studySecs;
-                                totalSteadySessions++;
-                                const today = new Date().toDateString();
-                                if (lastDate === new Date(Date.now() - 86400000).toDateString()) streak++;
-                                else if (lastDate !== today) streak = 1;
-                                localStorage.setItem('totalFocusSecs', totalFocusSecs);
-                                localStorage.setItem('totalSteadySessions', totalSteadySessions);
-                                localStorage.setItem('steadyStreak', streak);
-                                localStorage.setItem('lastSteadyDate', today);
-                                updateSteadyStats();
-                            }
-                        } catch (err) {
-                            console.error('Steady stats update error:', err);
-                            // Fallback to localStorage
-                            totalFocusSecs += studySecs;
-                            totalSteadySessions++;
-                            const today = new Date().toDateString();
-                            if (lastDate === new Date(Date.now() - 86400000).toDateString()) streak++;
-                            else if (lastDate !== today) streak = 1;
-                            localStorage.setItem('totalFocusSecs', totalFocusSecs);
-                            localStorage.setItem('totalSteadySessions', totalSteadySessions);
-                            localStorage.setItem('steadyStreak', streak);
-                            localStorage.setItem('lastSteadyDate', today);
-                            updateSteadyStats();
-                        }
-                    } else {
-                        // No user logged in – fallback to localStorage
-                        totalFocusSecs += studySecs;
-                        totalSteadySessions++;
-                        const today = new Date().toDateString();
-                        if (lastDate === new Date(Date.now() - 86400000).toDateString()) streak++;
-                        else if (lastDate !== today) streak = 1;
-                        localStorage.setItem('totalFocusSecs', totalFocusSecs);
-                        localStorage.setItem('totalSteadySessions', totalSteadySessions);
-                        localStorage.setItem('steadyStreak', streak);
-                        localStorage.setItem('lastSteadyDate', today);
-                        updateSteadyStats();
-                    }
-
-                    // Switch to rest mode
+                    addXP(15);
+                    totalFocusSecs += studySecs;
+                    totalSteadySessions++;
+                    localStorage.setItem('totalFocusSecs', totalFocusSecs);
+                    localStorage.setItem('totalSteadySessions', totalSteadySessions);
+                    const today = new Date().toDateString();
+                    if (lastDate === new Date(Date.now() - 86400000).toDateString()) streak++;
+                    else if (lastDate !== today) streak = 1;
+                    localStorage.setItem('steadyStreak', streak);
+                    localStorage.setItem('lastSteadyDate', today);
+                    updateSteadyStats();
                     isSteadyStudy = false;
                     steadyTimeLeft = restSecs;
                     updateSteadyDisplay();
                     const label = document.getElementById('steadyModeLabel');
                     if (label) label.innerHTML = '😴 Rest Time';
-                    startSteady(); // Start the rest timer
-
+                    startSteady();
                 } else {
-                    // ---------- REST SESSION COMPLETE ----------
                     showNotification('☕ Break finished! Ready to study again? +5 XP');
-                    await addXP(5);
-
+                    addXP(5);
                     isSteadyStudy = true;
                     steadyTimeLeft = studySecs;
                     updateSteadyDisplay();
                     const label = document.getElementById('steadyModeLabel');
                     if (label) label.innerHTML = '📚 Study Time';
-                    startSteady(); // Start the study timer again
+                    startSteady();
                 }
             }
         }, 1000);
-
-        // Update status text
         const status = document.getElementById('sessionStatus');
         if (status) status.innerText = isSteadyStudy ? 'Focus mode active' : 'Resting...';
     }
@@ -1282,8 +1053,7 @@ function timeAgo(dateString) {
         const focusEl = document.getElementById('todayFocusTime');
         const sessionsEl = document.getElementById('totalSessions');
         const streakEl = document.getElementById('steadyStreak');
-        if (focusEl) focusEl.innerText =
-            `${Math.floor(totalFocusSecs/3600)}h ${Math.floor((totalFocusSecs%3600)/60)}m`;
+        if (focusEl) focusEl.innerText = `${Math.floor(totalFocusSecs/3600)}h ${Math.floor((totalFocusSecs%3600)/60)}m`;
         if (sessionsEl) sessionsEl.innerText = totalSteadySessions;
         if (streakEl) streakEl.innerText = `${streak} days`;
     }
@@ -1415,7 +1185,7 @@ function timeAgo(dateString) {
         }
     }
 
-    // ========== RENDER ASSIGNMENTS (ASYNC) ==========
+    // ========== RENDER ASSIGNMENTS ==========
     async function renderAssignments(filter = "all") {
         const container = document.getElementById('assignmentsList');
         if (!container) return;
@@ -1463,7 +1233,6 @@ function timeAgo(dateString) {
                     await toggleAssignment(assignmentId, isChecked);
                 });
             });
-
         } catch (err) {
             console.error('Render assignments error:', err);
             container.innerHTML = '<p style="color:var(--danger);">Failed to load assignments.</p>';
@@ -1489,20 +1258,19 @@ function timeAgo(dateString) {
             if (!response.ok) throw new Error('Failed to update assignment');
 
             if (completed) {
-                await addXP(5);
+                addXP(5);
             }
 
             const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
             await renderAssignments(activeFilter);
             updateStats();
-
         } catch (err) {
             console.error('Toggle assignment error:', err);
             alert('Failed to update assignment.');
         }
     }
 
-    // ========== RENDER GOALS (ASYNC) ==========
+    // ========== RENDER GOALS ==========
     async function renderGoals() {
         const container = document.getElementById('goalsList');
         if (!container) return;
@@ -1551,7 +1319,6 @@ function timeAgo(dateString) {
                     await deleteGoal(goalId);
                 });
             });
-
         } catch (err) {
             console.error('Render goals error:', err);
             container.innerHTML = '<p style="color:var(--danger);">Failed to load goals.</p>';
@@ -1576,11 +1343,10 @@ function timeAgo(dateString) {
             if (!response.ok) throw new Error('Failed to update goal');
 
             if (done) {
-                await addXP(5);
+                addXP(5);
             }
 
             await renderGoals();
-
         } catch (err) {
             console.error('Toggle goal error:', err);
             alert('Failed to update goal.');
@@ -1604,7 +1370,6 @@ function timeAgo(dateString) {
             if (!response.ok) throw new Error('Failed to delete goal');
 
             await renderGoals();
-
         } catch (err) {
             console.error('Delete goal error:', err);
             alert('Failed to delete goal.');
@@ -1643,10 +1408,54 @@ function timeAgo(dateString) {
 
             input.value = '';
             await renderGoals();
-
         } catch (err) {
             console.error('Add goal error:', err);
             alert('Could not connect to server.');
+        }
+    }
+
+    // ========== LOAD STATS ==========
+    async function loadStats() {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const userId = user.id;
+        if (!userId) return;
+
+        try {
+            const response = await fetch(`${API_BASE}/api/stats?userId=${userId}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (!response.ok) throw new Error('Failed to fetch stats');
+
+            const data = await response.json();
+
+            xp = data.xp || 0;
+            level = data.level || 1;
+            badges = JSON.parse(data.badges || '[]');
+            totalFocusSecs = data.total_focus_seconds || 0;
+            totalSteadySessions = data.total_sessions || 0;
+            streak = data.streak || 0;
+            lastDate = data.last_active_date || null;
+
+            updateBadgesAndXP();
+            updateSteadyStats();
+        } catch (err) {
+            console.error('Load stats error:', err);
+        }
+    }
+
+    async function initStats(userId) {
+        try {
+            await fetch(`${API_BASE}/api/stats/init`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({ userId })
+            });
+            await loadStats();
+        } catch (err) {
+            console.error('Init stats error:', err);
         }
     }
 
