@@ -1,4 +1,4 @@
-// ========== GLOBAL HELPERS (accessible everywhere) ==========
+// ========== GLOBAL HELPERS ==========
 function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/[&<>]/g, function(m) {
@@ -30,72 +30,79 @@ function timeAgo(dateString) {
     return Math.floor(diff / 86400) + 'd ago';
 }
 
-// ========== PROTECT DASHBOARD ==========
+// ========== AUTH STATE ==========
 const token = localStorage.getItem('token');
-if (!token) {
-    window.location.href = 'login.html';
-}
-
-const userData = JSON.parse(localStorage.getItem('user') || '{}');
-console.log('👋 Welcome,', userData.name || 'User');
+const isLoggedIn = !!token;
+const user = JSON.parse(localStorage.getItem('user') || '{}');
+console.log('👋 Welcome,', isLoggedIn ? user.name : 'Guest');
 
 const API_BASE = 'https://studyflow-2kcz.onrender.com';
+
+// ========== REQUIRE LOGIN MODAL ==========
+function requireLogin() {
+    if (isLoggedIn) return true;
+    // Show a modal with login/signup options
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal" style="max-width:400px; text-align:center;">
+            <h3>🔐 Login Required</h3>
+            <p style="color:var(--text-secondary); margin:1rem 0;">Please log in or create an account to use this feature.</p>
+            <div style="display:flex; gap:0.75rem; justify-content:center; flex-wrap:wrap; margin-top:1.5rem;">
+                <a href="login.html" class="btn btn-primary" style="text-decoration:none;">Log In</a>
+                <a href="login.html" class="btn btn-secondary" style="text-decoration:none;">Sign Up</a>
+            </div>
+            <button class="btn btn-secondary" style="margin-top:1rem; width:100%;" onclick="this.closest('.modal-overlay').remove()">Close</button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) overlay.remove();
+    });
+    return false;
+}
 
 // ========== NOTIFICATIONS / ACTIVITIES ==========
 async function loadNotifications() {
     console.log('🔔 loadNotifications called');
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const userId = user.id;
-    if (!userId) {
-        console.log('❌ No userId');
+    if (!isLoggedIn) {
+        document.getElementById('notificationBadge').style.display = 'none';
+        document.getElementById('notificationList').innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">Login to see notifications.</p>';
         return;
     }
-
+    const userId = user.id;
     try {
         const url = `${API_BASE}/api/activities?userId=${userId}&limit=10`;
-        console.log('🔗 Fetching notifications:', url);
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
-        console.log('📦 Notifications response status:', response.status);
         if (!response.ok) throw new Error('Failed to fetch activities');
         const data = await response.json();
-        console.log('📊 Notifications data:', data);
 
         const badge = document.getElementById('notificationBadge');
         const list = document.getElementById('notificationList');
-        if (!list) {
-            console.error('❌ notificationList not found');
-            return;
-        }
-
         if (data.unreadCount > 0) {
             badge.style.display = 'inline';
             badge.textContent = data.unreadCount;
         } else {
             badge.style.display = 'none';
         }
-
         if (!data.activities || data.activities.length === 0) {
             list.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">No notifications yet</p>';
             return;
         }
-
         list.innerHTML = data.activities.map(a => `
             <div class="notification-item ${a.is_read ? '' : 'unread'}">
                 <div>${escapeHtml(a.message)}</div>
                 <span class="time">${timeAgo(a.created_at)}</span>
             </div>
         `).join('');
-        console.log('✅ Notifications rendered');
     } catch (err) {
-        console.error('❌ Load notifications error:', err);
-        const list = document.getElementById('notificationList');
-        if (list) list.innerHTML = '<p style="color:var(--danger);">Failed to load notifications.</p>';
+        console.error('Load notifications error:', err);
+        document.getElementById('notificationList').innerHTML = '<p style="color:var(--danger);">Failed to load.</p>';
     }
 }
 
-// Toggle dropdown
 function toggleNotifications() {
     const dropdown = document.getElementById('notificationDropdown');
     const isOpen = dropdown.classList.toggle('open');
@@ -105,10 +112,8 @@ function toggleNotifications() {
     }
 }
 
-// Mark all as read
 async function markAllRead() {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    if (!user.id) return;
+    if (!isLoggedIn) return;
     try {
         await fetch(`${API_BASE}/api/activities/mark-all-read`, {
             method: 'PUT',
@@ -118,45 +123,32 @@ async function markAllRead() {
             },
             body: JSON.stringify({ userId: user.id })
         });
-        const badge = document.getElementById('notificationBadge');
-        badge.style.display = 'none';
+        document.getElementById('notificationBadge').style.display = 'none';
     } catch (err) {
         console.error('Mark all read error:', err);
     }
 }
 
-// ========== LOAD RECENT ACTIVITIES (for Dashboard) ==========
+// ========== LOAD RECENT ACTIVITIES ==========
 async function loadRecentActivities() {
-    console.log('📋 loadRecentActivities called');
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const userId = user.id;
-    if (!userId) {
-        console.log('❌ No userId');
+    const container = document.getElementById('activityTimeline');
+    if (!container) return;
+    if (!isLoggedIn) {
+        container.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">Login to see your activity.</p>';
         return;
     }
-
     try {
-        const url = `${API_BASE}/api/activities?userId=${userId}&limit=5`;
-        console.log('🔗 Fetching:', url);
+        const url = `${API_BASE}/api/activities?userId=${user.id}&limit=5`;
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
-        console.log('📦 Response status:', response.status);
         if (!response.ok) throw new Error('Failed to fetch recent activities');
         const data = await response.json();
-        console.log('📊 Activities data:', data);
-
-        const container = document.getElementById('activityTimeline');
-        if (!container) {
-            console.error('❌ activityTimeline element not found');
-            return;
-        }
 
         if (!data.activities || data.activities.length === 0) {
             container.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">No recent activity</p>';
             return;
         }
-
         const icons = {
             'assignment_completed': '✅',
             'goal_completed': '🎯',
@@ -166,48 +158,40 @@ async function loadRecentActivities() {
             'account_created': '🎉',
             'reminder_set': '⏰'
         };
-
         container.innerHTML = data.activities.map(a => `
             <div>
                 ${icons[a.type] || '📌'} ${escapeHtml(a.message)}
                 <span class="activity-time">${timeAgo(a.created_at)}</span>
             </div>
         `).join('');
-        console.log('✅ Recent activities rendered');
     } catch (err) {
-        console.error('❌ Load recent activities error:', err);
-        const container = document.getElementById('activityTimeline');
-        if (container) container.innerHTML = '<p style="color:var(--danger);">Failed to load recent activity.</p>';
+        console.error('Load recent activities error:', err);
+        container.innerHTML = '<p style="color:var(--danger);">Failed to load.</p>';
     }
 }
 
 // ========== UPDATE DASHBOARD STATS ==========
 async function updateStats() {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const userId = user.id;
-    if (!userId) return;
-
+    if (!isLoggedIn) {
+        document.querySelectorAll('.stat-value').forEach(el => el.textContent = '—');
+        return;
+    }
     try {
-        const subRes = await fetch(`${API_BASE}/api/subjects?userId=${userId}`, {
+        const subRes = await fetch(`${API_BASE}/api/subjects?userId=${user.id}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         if (subRes.ok) {
             const subjects = await subRes.json();
             const statValues = document.querySelectorAll('.stat-value');
-            if (statValues.length >= 1) {
-                statValues[0].textContent = subjects.length;
-            }
+            if (statValues.length >= 1) statValues[0].textContent = subjects.length;
         }
-
-        const assignRes = await fetch(`${API_BASE}/api/assignments?userId=${userId}&filter=pending`, {
+        const assignRes = await fetch(`${API_BASE}/api/assignments?userId=${user.id}&filter=pending`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         if (assignRes.ok) {
-            const pendingAssignments = await assignRes.json();
+            const pending = await assignRes.json();
             const statValues = document.querySelectorAll('.stat-value');
-            if (statValues.length >= 2) {
-                statValues[1].textContent = pendingAssignments.length;
-            }
+            if (statValues.length >= 2) statValues[1].textContent = pending.length;
         }
     } catch (err) {
         console.error('Failed to update stats:', err);
@@ -216,45 +200,38 @@ async function updateStats() {
 
 // ========== LOAD STATS ==========
 async function loadStats() {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const userId = user.id;
-    if (!userId) return;
-
+    if (!isLoggedIn) {
+        // Show guest stats (0 XP, Level 1, empty badges)
+        window._statsData = null;
+        return;
+    }
     try {
-        const response = await fetch(`${API_BASE}/api/stats?userId=${userId}`, {
+        const response = await fetch(`${API_BASE}/api/stats?userId=${user.id}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         if (!response.ok) throw new Error('Failed to fetch stats');
         const data = await response.json();
-        // Update global variables (they will be set later inside the IIFE)
-        // We'll store them in a temporary object and then use them inside the IIFE
         window._statsData = data;
-        console.log('📊 Stats loaded:', data);
     } catch (err) {
         console.error('Load stats error:', err);
-        // Fallback: keep localStorage values
         window._statsData = null;
     }
 }
 
-// ========== REMINDERS (outside IIFE) ==========
+// ========== REMINDERS ==========
 async function loadReminders() {
-    console.log('⏰ loadReminders called');
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const userId = user.id;
-    if (!userId) {
-        console.log('❌ No userId');
+    const container = document.getElementById('remindersList');
+    if (!container) return;
+    if (!isLoggedIn) {
+        container.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">Login to manage reminders.</p>';
         return;
     }
     try {
-        const response = await fetch(`${API_BASE}/api/reminders?userId=${userId}`, {
+        const response = await fetch(`${API_BASE}/api/reminders?userId=${user.id}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         if (!response.ok) throw new Error('Failed to fetch reminders');
         const data = await response.json();
-        console.log('📋 Reminders loaded:', data);
-        const container = document.getElementById('remindersList');
-        if (!container) return;
         if (data.length === 0) {
             container.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">No reminders set.</p>';
             return;
@@ -270,10 +247,10 @@ async function loadReminders() {
         `).join('');
         container.querySelectorAll('.delete-reminder').forEach(btn => {
             btn.addEventListener('click', async () => {
+                if (!requireLogin()) return;
                 const id = parseInt(btn.dataset.id);
                 if (!confirm('Delete this reminder?')) return;
                 try {
-                    const user = JSON.parse(localStorage.getItem('user') || '{}');
                     await fetch(`${API_BASE}/api/reminders/${id}`, {
                         method: 'DELETE',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
@@ -285,38 +262,26 @@ async function loadReminders() {
             });
         });
     } catch (err) {
-        console.error('❌ Load reminders error:', err);
-        const container = document.getElementById('remindersList');
-        if (container) container.innerHTML = '<p style="color:var(--danger);">Failed to load reminders.</p>';
+        console.error('Load reminders error:', err);
+        container.innerHTML = '<p style="color:var(--danger);">Failed to load.</p>';
     }
 }
 
 function checkReminders() {
-    console.log('⏰ checkReminders called');
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    if (!user.id) {
-        console.log('❌ No user id');
-        return;
-    }
+    if (!isLoggedIn) return;
     fetch(`${API_BASE}/api/reminders?userId=${user.id}`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
     })
     .then(res => {
-        console.log('📦 Reminders response status:', res.status);
         if (!res.ok) throw new Error('Failed to fetch reminders');
         return res.json();
     })
     .then(reminders => {
-        console.log('📋 Reminders fetched:', reminders);
         const now = new Date();
         reminders.forEach(r => {
             const reminderTime = new Date(r.reminder_time);
             const diff = (reminderTime - now) / 1000;
-            console.log(`⏳ Reminder "${r.title}" diff: ${diff}s`);
-            // Trigger if within 60 seconds ahead or 10 seconds past
             if (diff <= 60 && diff > -10) {
-                console.log('🚀 Triggering reminder:', r.title);
-                // Call the updated triggerNotification (now async, but we don't await)
                 triggerNotification(r.title);
                 if (r.repeat === 'none') {
                     fetch(`${API_BASE}/api/reminders/${r.id}`, {
@@ -328,44 +293,34 @@ function checkReminders() {
             }
         });
     })
-    .catch(err => console.error('❌ Check reminders error:', err));
+    .catch(err => console.error('Check reminders error:', err));
 }
 
 async function triggerNotification(title) {
-    console.log('🔊 triggerNotification called for:', title);
+    if (!isLoggedIn) return;
+    // Log activity
+    try {
+        await fetch(`${API_BASE}/api/activities`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({
+                userId: user.id,
+                type: 'reminder_triggered',
+                message: `🔔 Reminder: "${title}"`,
+                metadata: { reminder_title: title }
+            })
+        });
+        await loadNotifications();
+    } catch (e) { console.warn('Failed to log reminder activity:', e); }
 
-    // 1. Log this reminder trigger as an activity (so it appears in bell dropdown)
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    if (user.id) {
-        try {
-            await fetch(`${API_BASE}/api/activities`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({
-                    userId: user.id,
-                    type: 'reminder_triggered',
-                    message: `🔔 Reminder: "${title}"`,
-                    metadata: { reminder_title: title }
-                })
-            });
-            // Refresh notifications to show the new activity
-            await loadNotifications();
-        } catch (e) {
-            console.warn('Failed to log reminder activity:', e);
-        }
-    }
-
-    // 2. Browser notification
+    // Browser notification
     if (Notification.permission === 'granted') {
         try {
             new Notification('🔔 Reminder', { body: title, icon: '📘' });
-            console.log('✅ Browser notification shown');
-        } catch (e) {
-            console.error('Notification error:', e);
-        }
+        } catch (e) { /* ignore */ }
     } else if (Notification.permission === 'default') {
         const perm = await Notification.requestPermission();
         if (perm === 'granted') {
@@ -373,18 +328,13 @@ async function triggerNotification(title) {
         }
     }
 
-    // 3. Play sound
+    // Sound
     try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') {
-            await audioCtx.resume();
-        }
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
         playBeep(audioCtx);
-    } catch (e) {
-        console.warn('Audio not supported', e);
-    }
+    } catch (e) { console.warn('Audio not supported', e); }
 
-    // 4. Show toast on page
     showNotification('🔔 ' + title);
 }
 
@@ -415,12 +365,10 @@ function playBeep(audioCtx) {
                 osc2.stop(audioCtx.currentTime + 0.5);
             } catch (e) { /* ignore */ }
         }, 200);
-    } catch (e) {
-        console.warn('Beep error:', e);
-    }
+    } catch (e) { /* ignore */ }
 }
 
-// ========== MAIN IIFE (contains all the rest) ==========
+// ========== MAIN IIFE ==========
 (function() {
     // ========== GLOBAL STATE ==========
     let pomodoroInterval = null;
@@ -451,8 +399,8 @@ function playBeep(audioCtx) {
     calendarMonth = now.getMonth();
     selectedCalendarDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    // Update stats from window._statsData if available
-    if (window._statsData) {
+    // Apply stats if logged in
+    if (isLoggedIn && window._statsData) {
         const s = window._statsData;
         xp = s.xp || 0;
         level = s.level || 1;
@@ -461,28 +409,40 @@ function playBeep(audioCtx) {
         totalSteadySessions = s.total_sessions || 0;
         streak = s.streak || 0;
         lastDate = s.last_active_date || null;
-        // Update UI
         updateBadgesAndXP();
         updateSteadyStats();
     }
 
     // ========== DOM READY ==========
     document.addEventListener('DOMContentLoaded', async () => {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        // Show/Hide guest banner
+        const banner = document.getElementById('guestBanner');
+        if (banner) {
+            banner.style.display = isLoggedIn ? 'none' : 'block';
+        }
+
+        // Update sidebar user name / avatar
         const nameEl = document.getElementById('dashboardUserName');
-        if (nameEl && user.name) {
-            nameEl.textContent = user.name;
+        if (nameEl) {
+            nameEl.textContent = isLoggedIn ? user.name : 'Guest';
         }
 
+        // Update greeting
         const greetingEl = document.getElementById('dashboardGreeting');
-        if (greetingEl && user.name) {
-            greetingEl.textContent = `Welcome back, ${user.name}`;
+        if (greetingEl) {
+            greetingEl.textContent = isLoggedIn ? `Welcome back, ${user.name}` : 'Welcome to StudyFlow';
         }
 
-        // Load stats, notifications, and recent activities
+        // Load stats, notifications, etc.
         await loadStats();
-        await loadNotifications();
-        await loadRecentActivities();
+        if (isLoggedIn) {
+            await loadNotifications();
+            await loadRecentActivities();
+        } else {
+            // Show guest placeholders
+            document.getElementById('activityTimeline').innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">Login to see your activity.</p>';
+            document.getElementById('notificationList').innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">Login to see notifications.</p>';
+        }
 
         initNavigation();
         initDarkMode();
@@ -497,8 +457,13 @@ function playBeep(audioCtx) {
         initQuickActions();
         initDashboardLinks();
         animateOnLoad();
-        loadSubjects();
-        updateStats();
+        if (isLoggedIn) {
+            loadSubjects();
+            updateStats();
+        } else {
+            document.querySelector('.subjects-grid').innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:2rem;">Login to see your subjects.</p>';
+            document.querySelectorAll('.stat-value').forEach(el => el.textContent = '—');
+        }
 
         // LOGOUT BUTTON
         document.getElementById('logoutBtn')?.addEventListener('click', () => {
@@ -511,16 +476,9 @@ function playBeep(audioCtx) {
         const addSubjectBtn = document.getElementById('addSubjectBtn');
         if (addSubjectBtn) {
             addSubjectBtn.addEventListener('click', async () => {
+                if (!requireLogin()) return;
                 const name = prompt('Enter the subject name:');
                 if (!name || name.trim() === '') return;
-
-                const user = JSON.parse(localStorage.getItem('user') || '{}');
-                const userId = user.id;
-                if (!userId) {
-                    alert('Please log in first.');
-                    return;
-                }
-
                 try {
                     const response = await fetch(`${API_BASE}/api/subjects`, {
                         method: 'POST',
@@ -528,15 +486,9 @@ function playBeep(audioCtx) {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${localStorage.getItem('token')}`
                         },
-                        body: JSON.stringify({ userId, name: name.trim() })
+                        body: JSON.stringify({ userId: user.id, name: name.trim() })
                     });
-
-                    if (!response.ok) {
-                        const data = await response.json();
-                        alert('Failed to add subject: ' + (data.error || 'Unknown error'));
-                        return;
-                    }
-
+                    if (!response.ok) throw new Error('Failed');
                     loadSubjects();
                     updateStats();
                     await loadNotifications();
@@ -551,21 +503,13 @@ function playBeep(audioCtx) {
         const addAssignmentBtn = document.getElementById('addAssignmentBtn');
         if (addAssignmentBtn) {
             addAssignmentBtn.addEventListener('click', async () => {
+                if (!requireLogin()) return;
                 const title = prompt('Assignment title:');
                 if (!title || title.trim() === '') return;
-
-                const subject = prompt('Subject (e.g., Math, CS):');
+                const subject = prompt('Subject:');
                 if (!subject || subject.trim() === '') return;
-
-                const dueDate = prompt('Due date (YYYY-MM-DD, or leave blank):');
+                const dueDate = prompt('Due date (YYYY-MM-DD, or blank):');
                 const dueDateValue = dueDate && dueDate.trim() ? dueDate.trim() : null;
-
-                const user = JSON.parse(localStorage.getItem('user') || '{}');
-                if (!user.id) {
-                    alert('Please log in first.');
-                    return;
-                }
-
                 try {
                     const response = await fetch(`${API_BASE}/api/assignments`, {
                         method: 'POST',
@@ -580,13 +524,7 @@ function playBeep(audioCtx) {
                             dueDate: dueDateValue
                         })
                     });
-
-                    if (!response.ok) {
-                        const data = await response.json();
-                        alert('Failed to add assignment: ' + (data.error || 'Unknown error'));
-                        return;
-                    }
-
+                    if (!response.ok) throw new Error('Failed');
                     const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
                     await renderAssignments(activeFilter);
                     updateStats();
@@ -603,8 +541,7 @@ function playBeep(audioCtx) {
         const addReminderBtn = document.getElementById('addReminderBtn');
         if (addReminderBtn) {
             addReminderBtn.addEventListener('click', () => {
-                const user = JSON.parse(localStorage.getItem('user') || '{}');
-                if (!user.id) return alert('Please log in.');
+                if (!requireLogin()) return;
                 openModal('Set Reminder', `
                     <div class="form-group"><label>Title</label><input type="text" id="reminderTitle" placeholder="What to remind?" required></div>
                     <div class="form-group"><label>Date & Time</label><input type="datetime-local" id="reminderDateTime" required></div>
@@ -647,33 +584,31 @@ function playBeep(audioCtx) {
             }
         });
 
-        // Mark all read button
         document.getElementById('markAllReadBtn')?.addEventListener('click', async () => {
+            if (!requireLogin()) return;
             await markAllRead();
             await loadNotifications();
         });
 
-        // ========== LOAD REMINDERS AND START CHECKING ==========
-        await loadReminders();
-        reminderCheckInterval = setInterval(checkReminders, 60000);
-        checkReminders(); // immediate check
-
-        // Request notification permission
-        if ('Notification' in window && Notification.permission === 'default') {
-            Notification.requestPermission().then(perm => {
-                console.log('🔔 Notification permission:', perm);
-            });
+        // Load reminders and start checking if logged in
+        if (isLoggedIn) {
+            await loadReminders();
+            reminderCheckInterval = setInterval(checkReminders, 60000);
+            checkReminders();
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+        } else {
+            document.getElementById('remindersList').innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">Login to manage reminders.</p>';
         }
 
-        // Resume audio context on any user click (required for sound)
+        // Resume audio on any click (for sound)
         document.addEventListener('click', () => {
             try {
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                if (ctx.state === 'suspended') {
-                    ctx.resume();
-                }
+                if (ctx.state === 'suspended') ctx.resume();
             } catch (e) { /* ignore */ }
-        }, { once: false });
+        });
     });
 
     // ========== HELPERS (inside IIFE) ==========
@@ -686,7 +621,6 @@ function playBeep(audioCtx) {
         return { year: y, month: m - 1, day: d };
     }
 
-    // ========== MODAL SYSTEM ==========
     function openModal(title, contentHtml, onSave) {
         const container = document.getElementById('modalContainer');
         const overlay = document.createElement('div');
@@ -867,6 +801,10 @@ function playBeep(audioCtx) {
     function renderGoals() {
         const container = document.getElementById('goalsList');
         if (!container) return;
+        if (!isLoggedIn) {
+            container.innerHTML = '<p style="color:var(--text-tertiary);">Login to manage goals.</p>';
+            return;
+        }
         if (!goals.length) { container.innerHTML =
                 '<p style="color:var(--text-tertiary)">✨ Add your first goal!</p>'; return; }
         container.innerHTML = goals.map((g, idx) => `
@@ -890,6 +828,7 @@ function playBeep(audioCtx) {
     }
 
     function addGoal() {
+        if (!isLoggedIn) { requireLogin(); return; }
         const input = document.getElementById('newGoalInput');
         const text = input.value.trim();
         if (text) { goals.push({ text, done: false });
@@ -898,6 +837,7 @@ function playBeep(audioCtx) {
     }
 
     function addXP(amount) {
+        if (!isLoggedIn) return;
         xp += amount;
         let needed = level * 100;
         while (xp >= needed) { xp -= needed;
@@ -934,7 +874,10 @@ function playBeep(audioCtx) {
     function initGoals() {
         const addBtn = document.getElementById('addGoalBtn');
         const input = document.getElementById('newGoalInput');
-        if (addBtn) addBtn.addEventListener('click', addGoal);
+        if (addBtn) addBtn.addEventListener('click', () => {
+            if (!isLoggedIn) { requireLogin(); return; }
+            addGoal();
+        });
         if (input) input.addEventListener('keypress', (e) => { if (e.key === 'Enter') addGoal(); });
         renderGoals();
     }
@@ -947,6 +890,10 @@ function playBeep(audioCtx) {
     function renderAssignments(filter = "all") {
         const container = document.getElementById('assignmentsList');
         if (!container) return;
+        if (!isLoggedIn) {
+            container.innerHTML = '<p style="color:var(--text-tertiary);">Login to see assignments.</p>';
+            return;
+        }
         const filtered = assignmentsData.filter(a => filter === 'all' ? true : (filter === 'completed' ? a
             .done : !a.done));
         container.innerHTML = filtered.map((a, idx) => {
@@ -987,12 +934,12 @@ function playBeep(audioCtx) {
     function saveCalendarEvents() { localStorage.setItem('calendarEvents', JSON.stringify(calendarEvents)); }
 
     async function loadCalendarEvents() {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const userId = user.id;
-        if (!userId) return;
-
+        if (!isLoggedIn) {
+            calendarEvents = [];
+            return;
+        }
         try {
-            const response = await fetch(`${API_BASE}/api/calendar?userId=${userId}`, {
+            const response = await fetch(`${API_BASE}/api/calendar?userId=${user.id}`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
             if (!response.ok) throw new Error('Failed to fetch events');
@@ -1108,6 +1055,7 @@ function playBeep(audioCtx) {
 
             list.querySelectorAll('.event-delete').forEach(btn => {
                 btn.addEventListener('click', async () => {
+                    if (!requireLogin()) return;
                     const eventId = parseInt(btn.dataset.eventId);
                     await deleteCalendarEvent(eventId);
                 });
@@ -1116,10 +1064,8 @@ function playBeep(audioCtx) {
     }
 
     async function deleteCalendarEvent(id) {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        if (!user.id) return;
+        if (!requireLogin()) return;
         if (!confirm('Delete this event?')) return;
-
         try {
             const response = await fetch(`${API_BASE}/api/calendar/${id}`, {
                 method: 'DELETE',
@@ -1129,9 +1075,7 @@ function playBeep(audioCtx) {
                 },
                 body: JSON.stringify({ userId: user.id })
             });
-
             if (!response.ok) throw new Error('Failed to delete event');
-
             await renderCalendar();
             showNotification('Event deleted');
         } catch (err) {
@@ -1168,6 +1112,7 @@ function playBeep(audioCtx) {
 
         if (addBtn) {
             addBtn.addEventListener('click', () => {
+                if (!requireLogin()) return;
                 const defaultKey = selectedCalendarDate ?
                     formatDateKey(selectedCalendarDate.getFullYear(), selectedCalendarDate.getMonth(), selectedCalendarDate.getDate()) :
                     formatDateKey(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
@@ -1192,9 +1137,6 @@ function playBeep(audioCtx) {
 
                         if (!title) { showNotification('Please enter a title', true); return false; }
                         if (!dateVal) { showNotification('Please select a date', true); return false; }
-
-                        const user = JSON.parse(localStorage.getItem('user') || '{}');
-                        if (!user.id) { showNotification('Please log in first.', true); return false; }
 
                         try {
                             const response = await fetch(`${API_BASE}/api/calendar`, {
@@ -1303,12 +1245,12 @@ function playBeep(audioCtx) {
     }
 
     async function loadSchedule() {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const userId = user.id;
-        if (!userId) return;
-
+        if (!isLoggedIn) {
+            scheduleClasses = getDefaultSchedule(); // show demo schedule for guests
+            return;
+        }
         try {
-            const response = await fetch(`${API_BASE}/api/schedule?userId=${userId}`, {
+            const response = await fetch(`${API_BASE}/api/schedule?userId=${user.id}`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
             if (!response.ok) throw new Error('Failed to fetch schedule');
@@ -1316,7 +1258,7 @@ function playBeep(audioCtx) {
             scheduleClasses = data;
         } catch (err) {
             console.error('Load schedule error:', err);
-            scheduleClasses = [];
+            scheduleClasses = getDefaultSchedule();
         }
     }
 
@@ -1328,6 +1270,7 @@ function playBeep(audioCtx) {
 
         if (addBtn) {
             addBtn.addEventListener('click', () => {
+                if (!requireLogin()) return;
                 openModal('Add Class', `
                     <div class="form-group"><label>Subject</label><input type="text" id="classSubject" placeholder="E.g., Biology" required></div>
                     <div class="form-group"><label>Day</label>
@@ -1364,9 +1307,6 @@ function playBeep(audioCtx) {
                         if (!subject) { showNotification('Please enter a subject', true); return false; }
                         if (!startTime || !endTime) { showNotification('Please set start and end times', true); return false; }
                         if (startTime >= endTime) { showNotification('End time must be after start time', true); return false; }
-
-                        const user = JSON.parse(localStorage.getItem('user') || '{}');
-                        if (!user.id) { showNotification('Please log in first.', true); return false; }
 
                         try {
                             const response = await fetch(`${API_BASE}/api/schedule`, {
@@ -1407,11 +1347,8 @@ function playBeep(audioCtx) {
 
         if (resetBtn) {
             resetBtn.addEventListener('click', async () => {
+                if (!requireLogin()) return;
                 if (!confirm('Reset schedule to default? This will replace all your current classes.')) return;
-
-                const user = JSON.parse(localStorage.getItem('user') || '{}');
-                if (!user.id) { showNotification('Please log in first.', true); return; }
-
                 try {
                     const response = await fetch(`${API_BASE}/api/schedule/reset`, {
                         method: 'POST',
@@ -1421,13 +1358,7 @@ function playBeep(audioCtx) {
                         },
                         body: JSON.stringify({ userId: user.id })
                     });
-
-                    if (!response.ok) {
-                        const data = await response.json();
-                        showNotification(data.error || 'Failed to reset schedule', true);
-                        return;
-                    }
-
+                    if (!response.ok) throw new Error('Failed');
                     await renderSchedule();
                     showNotification('🔄 Schedule reset to default');
                 } catch (err) {
@@ -1581,13 +1512,19 @@ function playBeep(audioCtx) {
                     if (notesNav) notesNav.click();
                 } else if (action === 'reminder') {
                     document.getElementById('addReminderBtn')?.click();
+                } else if (action === 'progress') {
+                    if (!requireLogin()) return;
+                    showNotification('📊 Progress page coming soon!');
                 } else {
                     showNotification('✨ Feature coming soon!');
                 }
             });
         });
         const globalAdd = document.getElementById('globalAddTask');
-        if (globalAdd) globalAdd.addEventListener('click', () => showNotification('➕ Add task form would open'));
+        if (globalAdd) globalAdd.addEventListener('click', () => {
+            if (!requireLogin()) return;
+            showNotification('➕ Add task form would open');
+        });
         const searchBtn = document.getElementById('searchBtn');
         if (searchBtn) searchBtn.addEventListener('click', () => showNotification('🔍 Search feature coming soon'));
     }
@@ -1608,32 +1545,22 @@ function playBeep(audioCtx) {
 
     // ========== LOAD SUBJECTS ==========
     async function loadSubjects() {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const userId = user.id;
-        if (!userId) {
-            console.log('No user logged in, skipping subjects load');
+        if (!isLoggedIn) {
+            document.querySelector('.subjects-grid').innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:2rem;">Login to see your subjects.</p>';
             return;
         }
-
         try {
-            const response = await fetch(`${API_BASE}/api/subjects?userId=${userId}`, {
+            const response = await fetch(`${API_BASE}/api/subjects?userId=${user.id}`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
-
-            if (!response.ok) {
-                console.error('Failed to fetch subjects:', response.status);
-                return;
-            }
-
+            if (!response.ok) throw new Error('Failed to fetch subjects');
             const subjects = await response.json();
             const container = document.querySelector('.subjects-grid');
             if (!container) return;
-
             if (subjects.length === 0) {
                 container.innerHTML = '<p style="color:var(--text-tertiary);">No subjects yet. Add your first!</p>';
                 return;
             }
-
             container.innerHTML = subjects.map(s => `
                 <div class="subject-card">
                     <h3>${escapeHtml(s.name)}</h3>
@@ -1642,6 +1569,7 @@ function playBeep(audioCtx) {
             `).join('');
         } catch (err) {
             console.error('Load subjects error:', err);
+            document.querySelector('.subjects-grid').innerHTML = '<p style="color:var(--danger);">Failed to load.</p>';
         }
     }
 
@@ -1649,30 +1577,22 @@ function playBeep(audioCtx) {
     async function renderAssignments(filter = "all") {
         const container = document.getElementById('assignmentsList');
         if (!container) return;
-
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const userId = user.id;
-        if (!userId) {
-            container.innerHTML = '<p style="color:var(--text-tertiary);">Please log in to see assignments.</p>';
+        if (!isLoggedIn) {
+            container.innerHTML = '<p style="color:var(--text-tertiary);">Login to see assignments.</p>';
             return;
         }
-
         try {
-            const url = `${API_BASE}/api/assignments?userId=${userId}&filter=${filter}`;
+            const url = `${API_BASE}/api/assignments?userId=${user.id}&filter=${filter}`;
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
-
             if (!response.ok) throw new Error('Failed to fetch assignments');
-
             const data = await response.json();
             assignmentsData = data;
-
             if (assignmentsData.length === 0) {
                 container.innerHTML = '<p style="color:var(--text-tertiary);">📭 No assignments yet. Add one!</p>';
                 return;
             }
-
             container.innerHTML = assignmentsData.map((a) => {
                 const dueDisplay = a.due_date ? new Date(a.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'No date';
                 return `
@@ -1685,7 +1605,6 @@ function playBeep(audioCtx) {
                     </div>
                 `;
             }).join('');
-
             container.querySelectorAll('.assign-check').forEach(cb => {
                 cb.addEventListener('change', async (e) => {
                     const assignmentId = parseInt(cb.dataset.id);
@@ -1701,7 +1620,7 @@ function playBeep(audioCtx) {
 
     // ========== TOGGLE ASSIGNMENT ==========
     async function toggleAssignment(id, completed) {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (!requireLogin()) return;
         try {
             const response = await fetch(`${API_BASE}/api/assignments/${id}`, {
                 method: 'PUT',
@@ -1714,13 +1633,8 @@ function playBeep(audioCtx) {
                     completed: completed
                 })
             });
-
             if (!response.ok) throw new Error('Failed to update assignment');
-
-            if (completed) {
-                addXP(5);
-            }
-
+            if (completed) addXP(5);
             const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
             await renderAssignments(activeFilter);
             updateStats();
@@ -1734,29 +1648,21 @@ function playBeep(audioCtx) {
     async function renderGoals() {
         const container = document.getElementById('goalsList');
         if (!container) return;
-
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const userId = user.id;
-        if (!userId) {
-            container.innerHTML = '<p style="color:var(--text-tertiary);">Please log in.</p>';
+        if (!isLoggedIn) {
+            container.innerHTML = '<p style="color:var(--text-tertiary);">Login to manage goals.</p>';
             return;
         }
-
         try {
-            const response = await fetch(`${API_BASE}/api/goals?userId=${userId}`, {
+            const response = await fetch(`${API_BASE}/api/goals?userId=${user.id}`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
-
             if (!response.ok) throw new Error('Failed to fetch goals');
-
             const data = await response.json();
             goals = data;
-
             if (goals.length === 0) {
                 container.innerHTML = '<p style="color:var(--text-tertiary);">✨ Add your first goal!</p>';
                 return;
             }
-
             container.innerHTML = goals.map((g) => `
                 <div class="goal-item">
                     <input type="checkbox" class="goal-check" data-id="${g.id}" ${g.done ? 'checked' : ''} aria-label="Complete goal">
@@ -1764,7 +1670,6 @@ function playBeep(audioCtx) {
                     <button class="del-goal" data-id="${g.id}" aria-label="Delete goal">🗑️</button>
                 </div>
             `).join('');
-
             container.querySelectorAll('.goal-check').forEach(cb => {
                 cb.addEventListener('change', async (e) => {
                     const goalId = parseInt(cb.dataset.id);
@@ -1772,7 +1677,6 @@ function playBeep(audioCtx) {
                     await toggleGoal(goalId, isChecked);
                 });
             });
-
             container.querySelectorAll('.del-goal').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
                     const goalId = parseInt(btn.dataset.id);
@@ -1786,7 +1690,7 @@ function playBeep(audioCtx) {
     }
 
     async function toggleGoal(id, done) {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (!requireLogin()) return;
         try {
             const response = await fetch(`${API_BASE}/api/goals/${id}`, {
                 method: 'PUT',
@@ -1799,13 +1703,8 @@ function playBeep(audioCtx) {
                     done: done
                 })
             });
-
             if (!response.ok) throw new Error('Failed to update goal');
-
-            if (done) {
-                addXP(5);
-            }
-
+            if (done) addXP(5);
             await renderGoals();
         } catch (err) {
             console.error('Toggle goal error:', err);
@@ -1814,9 +1713,8 @@ function playBeep(audioCtx) {
     }
 
     async function deleteGoal(id) {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (!requireLogin()) return;
         if (!confirm('Delete this goal?')) return;
-
         try {
             const response = await fetch(`${API_BASE}/api/goals/${id}`, {
                 method: 'DELETE',
@@ -1826,9 +1724,7 @@ function playBeep(audioCtx) {
                 },
                 body: JSON.stringify({ userId: user.id })
             });
-
             if (!response.ok) throw new Error('Failed to delete goal');
-
             await renderGoals();
         } catch (err) {
             console.error('Delete goal error:', err);
@@ -1837,16 +1733,10 @@ function playBeep(audioCtx) {
     }
 
     async function addGoal() {
+        if (!requireLogin()) return;
         const input = document.getElementById('newGoalInput');
         const text = input.value.trim();
         if (!text) return;
-
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        if (!user.id) {
-            alert('Please log in first.');
-            return;
-        }
-
         try {
             const response = await fetch(`${API_BASE}/api/goals`, {
                 method: 'POST',
@@ -1859,13 +1749,11 @@ function playBeep(audioCtx) {
                     text: text
                 })
             });
-
             if (!response.ok) {
                 const data = await response.json();
                 alert('Failed to add goal: ' + (data.error || 'Unknown error'));
                 return;
             }
-
             input.value = '';
             await renderGoals();
         } catch (err) {
