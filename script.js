@@ -1525,8 +1525,6 @@ function playBeep(audioCtx) {
             if (!requireLogin()) return;
             showNotification('➕ Add task form would open');
         });
-        const searchBtn = document.getElementById('searchBtn');
-        if (searchBtn) searchBtn.addEventListener('click', () => showNotification('🔍 Search feature coming soon'));
     }
 
     // ========== ENTRANCE ANIMATION ==========
