@@ -1332,7 +1332,7 @@ body {
 
 /* Quick action button for reminder */
 .quick-action-btn[data-action="reminder"] {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
+    background: linear-gradient(135deg, #4f46e5, #6366f1);
     color: white;
 }
 .quick-action-btn[data-action="reminder"]:hover {
