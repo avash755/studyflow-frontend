@@ -1,275 +1,305 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="description" content="StudyFlow — Smart study management with Pomodoro timer, steady mode, calendar, class schedule, gamification, and daily goals.">
-    <meta name="theme-color" content="#4f46e5">
-    <title>StudyFlow — Dashboard</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
-    <!-- Lucide Icons -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="StudyFlow – The smart study companion for students. Track subjects, assignments, goals, and boost productivity with Pomodoro timer and gamification." />
+    <title>StudyFlow – Smart Study Management</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* ---------- Reset & Variables ---------- */
+        * { margin:0; padding:0; box-sizing:border-box; }
+        :root {
+            --primary: #4f46e5;
+            --primary-light: #6366f1;
+            --primary-dark: #4338ca;
+            --primary-glow: rgba(79,70,229,0.2);
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --border: #e2e8f0;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --font-display: 'Crimson Pro', serif;
+            --font-body: 'DM Sans', sans-serif;
+            --shadow-md: 0 4px 20px rgba(0,0,0,0.08);
+            --radius: 20px;
+            --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        body {
+            font-family: var(--font-body);
+            background: var(--bg);
+            color: var(--text-primary);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+        .container { max-width:1200px; margin:0 auto; padding:0 1.5rem; }
+
+        /* ---------- Navbar ---------- */
+        .navbar {
+            padding:1.2rem 0;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            border-bottom:1px solid var(--border);
+            flex-wrap:wrap;
+            gap:0.8rem;
+        }
+        .logo {
+            display:flex;
+            align-items:center;
+            gap:0.6rem;
+            font-family:var(--font-display);
+            font-size:1.6rem;
+            font-weight:700;
+            color:var(--primary);
+            text-decoration:none;
+        }
+        .logo-icon {
+            width:40px;
+            height:40px;
+            background:linear-gradient(135deg, var(--primary), var(--primary-light));
+            border-radius:12px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            color:white;
+        }
+        .nav-actions { display:flex; gap:0.8rem; flex-wrap:wrap; }
+        .btn {
+            display:inline-flex;
+            align-items:center;
+            gap:0.5rem;
+            padding:0.6rem 1.2rem;
+            border:none;
+            border-radius:40px;
+            font-weight:600;
+            font-family:var(--font-body);
+            cursor:pointer;
+            transition:all 0.25s var(--ease-spring);
+            text-decoration:none;
+            font-size:0.9rem;
+        }
+        .btn-primary {
+            background:linear-gradient(135deg, var(--primary), var(--primary-light));
+            color:white;
+            box-shadow:0 4px 14px var(--primary-glow);
+        }
+        .btn-primary:hover { transform:translateY(-2px); box-shadow:0 8px 24px var(--primary-glow); }
+        .btn-outline {
+            background:transparent;
+            border:2px solid var(--border);
+            color:var(--text-primary);
+        }
+        .btn-outline:hover { border-color:var(--primary); color:var(--primary); }
+
+        /* ---------- Hero ---------- */
+        .hero { padding:4rem 0 3rem; text-align:center; }
+        .hero h1 {
+            font-family:var(--font-display);
+            font-size:3.2rem;
+            font-weight:700;
+            line-height:1.2;
+            margin-bottom:1rem;
+        }
+        .hero h1 span { color:var(--primary); }
+        .hero p {
+            font-size:1.2rem;
+            color:var(--text-secondary);
+            max-width:640px;
+            margin:0 auto 2rem;
+        }
+        .hero-actions { display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; }
+        .hero-actions .btn { font-size:1rem; padding:0.8rem 2rem; }
+
+        /* ---------- Features ---------- */
+        .features {
+            padding:3rem 0;
+            display:grid;
+            grid-template-columns:repeat(auto-fit, minmax(260px,1fr));
+            gap:2rem;
+            border-top:1px solid var(--border);
+            margin-top:2rem;
+        }
+        .feature-card {
+            background:var(--surface);
+            padding:1.8rem 1.5rem;
+            border-radius:var(--radius);
+            border:1px solid var(--border);
+            transition:all 0.3s var(--ease-spring);
+        }
+        .feature-card:hover { transform:translateY(-4px); box-shadow:var(--shadow-md); }
+        .feature-card .icon {
+            width:48px; height:48px;
+            background:var(--primary-glow);
+            border-radius:12px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            color:var(--primary);
+            margin-bottom:1rem;
+        }
+        .feature-card h3 {
+            font-family:var(--font-display);
+            font-size:1.2rem;
+            margin-bottom:0.4rem;
+        }
+        .feature-card p { color:var(--text-secondary); font-size:0.95rem; }
+
+        /* ---------- Footer ---------- */
+        .footer {
+            border-top:1px solid var(--border);
+            padding:2.5rem 0 1.5rem;
+            margin-top:3rem;
+        }
+        .footer-grid {
+            display:grid;
+            grid-template-columns:2fr 1fr 1fr 1fr;
+            gap:2rem;
+        }
+        .footer h4 { font-weight:600; margin-bottom:0.8rem; font-size:0.95rem; }
+        .footer ul { list-style:none; }
+        .footer ul li { margin-bottom:0.4rem; }
+        .footer ul a { color:var(--text-secondary); text-decoration:none; font-size:0.9rem; }
+        .footer ul a:hover { color:var(--primary); }
+        .footer-bottom {
+            text-align:center;
+            padding-top:1.5rem;
+            margin-top:1.5rem;
+            border-top:1px solid var(--border);
+            font-size:0.8rem;
+            color:var(--text-muted);
+        }
+        .footer-bottom a { color:var(--text-secondary); text-decoration:none; }
+        .footer-bottom a:hover { color:var(--primary); }
+
+        /* ---------- Responsive ---------- */
+        @media (max-width:768px) {
+            .hero h1 { font-size:2.2rem; }
+            .footer-grid { grid-template-columns:1fr 1fr; }
+        }
+        @media (max-width:480px) {
+            .footer-grid { grid-template-columns:1fr; }
+            .navbar { justify-content:center; }
+            .hero-actions { flex-direction:column; align-items:center; }
+        }
+    </style>
 </head>
 <body>
-    <button class="hamburger" id="hamburgerBtn" aria-label="Menu">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" />
-        </svg>
-    </button>
-    <div class="overlay" id="overlay"></div>
-    <button class="dark-mode-toggle" id="darkModeToggle" aria-label="Toggle dark mode"><i data-lucide="moon"></i></button>
-
-    <nav class="sidebar" id="sidebar">
-        <a href="index.html" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:0.75rem; padding:0 1.5rem; margin-bottom:1.8rem;">
-            <div class="logo-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                </svg>
+    <div class="container">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <a href="index.html" class="logo">
+                <div class="logo-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                    </svg>
+                </div>
+                StudyFlow
+            </a>
+            <div class="nav-actions">
+                <a href="login.html" class="btn btn-outline">Log In</a>
+                <a href="login.html" class="btn btn-primary">Get Started Free</a>
             </div>
-            <span class="logo-text">StudyFlow</span>
-        </a>
-        <div class="nav-links">
-            <a href="#" class="nav-link active" data-page="dashboard">
-                <i data-lucide="layout-dashboard"></i>
-                <span>Dashboard</span></a>
-            <span class="nav-section-label">Academics</span>
-            <a href="#" class="nav-link" data-page="subjects">
-                <i data-lucide="book-open"></i>
-                <span>Subjects</span></a>
-            <a href="#" class="nav-link" data-page="assignments">
-                <i data-lucide="clipboard-list"></i>
-                <span>Assignments</span></a>
-            <a href="#" class="nav-link" data-page="schedule">
-                <i data-lucide="calendar"></i>
-                <span>Class Schedule</span></a>
-            <a href="#" class="nav-link" data-page="calendar">
-                <i data-lucide="calendar-days"></i>
-                <span>Calendar</span></a>
-            <span class="nav-section-label">Focus</span>
-            <a href="#" class="nav-link" data-page="steady">
-                <i data-lucide="brain"></i>
-                <span>Steady Mode</span></a>
-            <span class="nav-section-label">Tools</span>
-            <a href="#" class="nav-link" data-page="reminders">
-                <i data-lucide="bell"></i>
-                <span>Reminders</span></a>
-            <a href="#" class="nav-link" data-page="notes">
-                <i data-lucide="file-text"></i>
-                <span>Notes</span></a>
-        </div>
-        <div class="nav-footer">
-            <div class="user-profile">
-                <div class="avatar" id="dashboardAvatar">JS</div>
-                <div>
-                    <div class="user-name" id="dashboardUserName">John Student</div>
-                    <div class="user-status" style="color:var(--text-tertiary);font-size:0.8rem;">Online</div>
-                </div>
+        </nav>
+
+        <!-- Hero -->
+        <section class="hero">
+            <h1>Study Smarter, <span>Not Harder</span></h1>
+            <p>Track subjects, assignments, and goals. Stay focused with Pomodoro timer, gamified XP, and smart reminders — all in one place.</p>
+            <div class="hero-actions">
+                <a href="login.html" class="btn btn-primary">Start for Free</a>
+                <a href="#features" class="btn btn-outline">Learn More ↓</a>
             </div>
-            <button id="logoutBtn" class="btn btn-secondary" style="width:100%; margin-top:12px; justify-content:center;">
-                <i data-lucide="log-out"></i> Logout
-            </button>
-        </div>
-    </nav>
+        </section>
 
-    <main class="main-content">
-        <!-- Guest Banner -->
-        <div id="guestBanner" style="display:none; background:linear-gradient(135deg, var(--primary), var(--primary-light)); color:white; padding:0.8rem 1.5rem; border-radius:12px; margin-bottom:1.5rem; text-align:center; font-weight:500; box-shadow:var(--shadow-sm);">
-            👋 You are viewing as a guest. 
-            <a href="login.html" style="color:white; font-weight:700; text-decoration:underline; margin:0 0.5rem;">Login</a> or 
-            <a href="login.html" style="color:white; font-weight:700; text-decoration:underline; margin:0 0.5rem;">Sign up</a> 
-            to unlock all features.
-        </div>
-
-        <!-- Dashboard Page -->
-        <div class="page active" id="dashboard-page">
-            <header class="page-header">
-                <div><h1 class="page-title" id="dashboardGreeting">Welcome back, John</h1><p class="page-subtitle">Stay consistent, stay steady.</p></div>
-                <div class="header-actions">
-                    <button class="btn btn-primary" id="globalAddTask" aria-label="Add task"><i data-lucide="plus"></i> Add Task</button>
-                    <div class="notification-container" id="notificationContainer">
-                        <button class="btn btn-secondary" id="notificationBell" aria-label="Notifications" style="position:relative;">
-                            <i data-lucide="bell"></i>
-                            <span id="notificationBadge" style="position:absolute; top:-6px; right:-6px; background:var(--danger); color:white; border-radius:50%; padding:2px 6px; font-size:0.65rem; font-weight:700; display:none;">0</span>
-                        </button>
-                        <div class="notification-dropdown" id="notificationDropdown">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem; border-bottom:1px solid var(--border); padding-bottom:0.5rem;">
-                                <strong>Notifications</strong>
-                                <button id="markAllReadBtn" style="background:none; border:none; color:var(--primary); cursor:pointer; font-size:0.8rem; font-weight:600;">Mark all read</button>
-                            </div>
-                            <div id="notificationList"><p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">No notifications yet</p></div>
-                        </div>
-                    </div>
-                </div>
-            </header>
-            <div class="stats-row">
-                <div class="stat-card"><div class="stat-icon"><i data-lucide="book-open"></i></div><div><div class="stat-value" id="statSubjects">0</div><div>Active Subjects</div></div></div>
-                <div class="stat-card"><div class="stat-icon"><i data-lucide="clipboard-list"></i></div><div><div class="stat-value" id="statPending">0</div><div>Pending Tasks</div></div></div>
-                <div class="stat-card"><div class="stat-icon"><i data-lucide="clock"></i></div><div><div class="stat-value" id="statStudyHours">0h</div><div>Study Time</div></div></div>
-                <div class="stat-card"><div class="stat-icon"><i data-lucide="check-circle"></i></div><div><div class="stat-value" id="statCompletion">0%</div><div>Completion</div></div></div>
+        <!-- Features -->
+        <section id="features" class="features">
+            <div class="feature-card">
+                <div class="icon" data-lucide="book-open"></div>
+                <h3>Subjects & Assignments</h3>
+                <p>Organize your courses, track deadlines, and mark tasks complete — all in one dashboard.</p>
             </div>
-            <div class="dashboard-grid">
-                <div class="content-card"><div class="card-header"><h2><i data-lucide="calendar"></i> Upcoming Deadlines</h2><a href="#" class="card-link" data-nav="assignments">View all</a></div>
-                    <div class="deadline-list" id="upcomingDeadlines"><p style="color:var(--text-tertiary);">No upcoming deadlines</p></div>
-                </div>
-                <div class="content-card"><div class="card-header"><h2><i data-lucide="zap"></i> Quick Actions</h2></div>
-                    <div class="quick-actions-grid">
-                        <button class="quick-action-btn" data-action="study"><i data-lucide="play-circle"></i> Start Study</button>
-                        <button class="quick-action-btn" data-action="note"><i data-lucide="file-plus"></i> Create Note</button>
-                        <button class="quick-action-btn" data-action="reminder"><i data-lucide="bell-plus"></i> Set Reminder</button>
-                        <button class="quick-action-btn" data-action="progress"><i data-lucide="bar-chart3"></i> View Progress</button>
-                    </div>
-                </div>
-                <div class="content-card"><div class="card-header"><h2><i data-lucide="timer"></i> Pomodoro Timer</h2></div>
-                    <div class="timer-container">
-                        <div class="timer-display" id="pomodoroDisplay">25:00</div>
-                        <div class="timer-controls">
-                            <button class="timer-btn start" id="pomodoroStart"><i data-lucide="play"></i> Start</button>
-                            <button class="timer-btn pause" id="pomodoroPause"><i data-lucide="pause"></i> Pause</button>
-                            <button class="timer-btn reset" id="pomodoroReset"><i data-lucide="refresh-cw"></i> Reset</button>
-                        </div>
-                        <div><button id="modeSwitch" class="mode-switch-btn">Switch to Break (5 min)</button></div>
-                    </div>
-                </div>
-                <div class="content-card"><div class="card-header"><h2><i data-lucide="target"></i> Today's Goals</h2></div>
-                    <div id="goalsList"></div>
-                    <div class="add-goal"><input type="text" id="newGoalInput" placeholder="Write a goal..." aria-label="New goal"><button class="btn btn-primary" id="addGoalBtn"><i data-lucide="plus"></i> Add</button></div>
-                </div>
-                <div class="content-card xp-card"><div class="card-header"><h2><i data-lucide="star"></i> Your Progress</h2></div>
-                    <div id="levelDisplay">Level 1</div>
-                    <div class="xp-bar"><div class="xp-fill" id="xpFill"></div></div>
-                    <div id="xpText">0 / 100 XP</div>
-                    <div style="margin-top:1rem;"><i data-lucide="trophy"></i> Badges</div>
-                    <div id="badgesContainer" class="badges-container"></div>
-                </div>
-                <div class="content-card"><div class="card-header"><h2><i data-lucide="activity"></i> Recent Activity</h2><a href="#" id="viewAllActivities" style="font-size:0.85rem;">View all</a></div>
-                    <div class="activity-timeline" id="activityTimeline"><p style="color:var(--text-tertiary); text-align:center; padding:1rem;">Loading...</p></div>
-                </div>
+            <div class="feature-card">
+                <div class="icon" data-lucide="timer"></div>
+                <h3>Pomodoro Timer</h3>
+                <p>Stay focused with 25-minute study sessions and 5-minute breaks. Boost your productivity.</p>
             </div>
-        </div>
-
-        <!-- Subjects Page -->
-        <div class="page" id="subjects-page">
-            <header class="page-header"><div><h1 class="page-title"><i data-lucide="book-open"></i> My Subjects</h1><p class="page-subtitle">Track your courses</p></div><button class="btn btn-primary" id="addSubjectBtn"><i data-lucide="plus"></i> Add Subject</button></header>
-            <div class="subjects-grid" id="subjectsGrid"><p style="color:var(--text-tertiary);">Loading...</p></div>
-        </div>
-
-        <!-- Assignments Page -->
-        <div class="page" id="assignments-page">
-            <header class="page-header"><div><h1 class="page-title"><i data-lucide="clipboard-list"></i> Assignments</h1><p class="page-subtitle">Manage your coursework</p></div><button class="btn btn-primary" id="addAssignmentBtn"><i data-lucide="plus"></i> New Assignment</button></header>
-            <div class="assignments-filter">
-                <button class="filter-btn active" data-filter="all">All</button>
-                <button class="filter-btn" data-filter="pending">Pending</button>
-                <button class="filter-btn" data-filter="completed">Completed</button>
+            <div class="feature-card">
+                <div class="icon" data-lucide="target"></div>
+                <h3>Goals & Gamification</h3>
+                <p>Set daily goals, earn XP, level up, and unlock badges as you progress through your studies.</p>
             </div>
-            <div class="assignments-list" id="assignmentsList"></div>
-        </div>
-
-        <!-- Class Schedule Page -->
-        <div class="page" id="schedule-page">
-            <header class="page-header">
-                <div><h1 class="page-title"><i data-lucide="calendar"></i> Class Schedule</h1><p class="page-subtitle">Your weekly timetable</p></div>
-                <div class="header-actions">
-                    <button class="btn btn-secondary" id="resetScheduleBtn"><i data-lucide="refresh-cw"></i> Reset Default</button>
-                    <button class="btn btn-primary" id="addClassBtn"><i data-lucide="plus"></i> Add Class</button>
-                </div>
-            </header>
-            <div class="schedule-grid-wrapper"><div class="schedule-grid" id="scheduleGrid"></div></div>
-            <div class="schedule-legend" id="scheduleLegend"></div>
-        </div>
-
-        <!-- Calendar Page -->
-        <div class="page" id="calendar-page">
-            <header class="page-header">
-                <div><h1 class="page-title"><i data-lucide="calendar-days"></i> Calendar</h1><p class="page-subtitle">Manage events & deadlines</p></div>
-                <div class="header-actions">
-                    <button class="btn btn-secondary" id="calendarTodayBtn"><i data-lucide="calendar"></i> Today</button>
-                    <button class="btn btn-primary" id="addEventBtn"><i data-lucide="plus"></i> Add Event</button>
-                </div>
-            </header>
-            <div class="content-card" style="padding:1.5rem;">
-                <div class="calendar-nav">
-                    <button class="btn-icon" id="calendarPrev" aria-label="Previous month">◀</button>
-                    <div class="calendar-month-label" id="calendarMonthLabel">June 2026</div>
-                    <button class="btn-icon" id="calendarNext" aria-label="Next month">▶</button>
-                </div>
-                <div class="calendar-grid" id="calendarGrid"></div>
-                <div class="calendar-events-panel" id="calendarEventsPanel">
-                    <h3><i data-lucide="bell"></i> Events for <span id="selectedDateLabel">—</span></h3>
-                    <div id="eventsList" class="no-events">Select a date to view events</div>
-                </div>
+            <div class="feature-card">
+                <div class="icon" data-lucide="calendar"></div>
+                <h3>Calendar & Schedule</h3>
+                <p>Plan your week with a visual timetable and add events to never miss an important date.</p>
             </div>
-        </div>
-
-        <!-- Steady Mode Page -->
-        <div class="page" id="steady-page">
-            <header class="page-header"><div><h1 class="page-title"><i data-lucide="brain"></i> Steady Mode</h1><p class="page-subtitle">Custom study/rest cycles</p></div><button class="btn btn-secondary" id="resetSteadySettings"><i data-lucide="refresh-cw"></i> Reset Settings</button></header>
-            <div class="steady-container">
-                <div class="steady-settings">
-                    <div class="settings-group"><label><i data-lucide="clock"></i> Study Duration</label><input type="range" id="studyHours" min="0.5" max="4" step="0.5" value="1"><span id="studyHoursDisplay">1 hour</span></div>
-                    <div class="settings-group"><label><i data-lucide="scale"></i> Study/Rest Ratio</label><input type="range" id="studyRatio" min="1" max="10" step="0.5" value="4"><span id="ratioDisplay">4 : 1</span><small>(study:rest)</small></div>
-                    <div class="settings-group"><label><i data-lucide="coffee"></i> Calculated Rest</label><div id="restTimeDisplay" class="rest-display">15 min</div></div>
-                </div>
-                <div class="steady-timer-card">
-                    <div id="steadyModeLabel"><i data-lucide="book-open"></i> Study Time</div>
-                    <div class="steady-timer-display" id="steadyTimerDisplay">01:00:00</div>
-                    <div class="steady-progress"><div class="steady-progress-fill" id="steadyProgressFill"></div></div>
-                    <div class="timer-controls">
-                        <button class="steady-btn start" id="steadyStart"><i data-lucide="play"></i> Start</button>
-                        <button class="steady-btn pause" id="steadyPause"><i data-lucide="pause"></i> Pause</button>
-                        <button class="steady-btn reset" id="steadyReset"><i data-lucide="refresh-cw"></i> Reset</button>
-                    </div>
-                    <div id="sessionStatus" class="session-status">Ready</div>
-                </div>
-                <div class="steady-stats">
-                    <div class="steady-stat"><span><i data-lucide="target"></i> Today's Focus</span><strong id="todayFocusTime">0h 0m</strong></div>
-                    <div class="steady-stat"><span><i data-lucide="trophy"></i> Sessions</span><strong id="totalSessions">0</strong></div>
-                    <div class="steady-stat"><span><i data-lucide="flame"></i> Streak</span><strong id="steadyStreak">0 days</strong></div>
-                </div>
+            <div class="feature-card">
+                <div class="icon" data-lucide="bell"></div>
+                <h3>Smart Reminders</h3>
+                <p>Get notified about upcoming tasks with sound and browser alerts — never forget again.</p>
             </div>
-        </div>
-
-        <!-- Reminders Page -->
-        <div class="page" id="reminders-page">
-            <header class="page-header">
-                <div><h1 class="page-title"><i data-lucide="bell"></i> Reminders</h1><p class="page-subtitle">Get notified at the right time</p></div>
-                <button class="btn btn-primary" id="addReminderBtn"><i data-lucide="plus"></i> New Reminder</button>
-            </header>
-            <div class="content-card">
-                <div id="remindersList" style="display:flex; flex-direction:column; gap:0.75rem;">
-                    <p style="color:var(--text-tertiary); text-align:center;">Loading reminders...</p>
-                </div>
+            <div class="feature-card">
+                <div class="icon" data-lucide="activity"></div>
+                <h3>Activity Feed</h3>
+                <p>See your recent activity history at a glance — track your progress over time.</p>
             </div>
-        </div>
-
-        <!-- Notes Page -->
-        <div class="page" id="notes-page">
-            <header class="page-header"><div><h1 class="page-title"><i data-lucide="file-text"></i> My Notes</h1><p class="page-subtitle">Organize your materials</p></div><button class="btn btn-primary"><i data-lucide="plus"></i> New Note</button></header>
-            <div class="notes-grid">
-                <div class="note-card"><h3>Binary Search Trees</h3><p>Data structures notes</p><div class="note-tags"><span>DSA</span><span>Algorithms</span></div></div>
-                <div class="note-card"><h3>Calculus Integration</h3><p>Math review</p><div class="note-tags"><span>Calculus</span><span>Integration</span></div></div>
-                <div class="note-card"><h3>Newton's Laws</h3><p>Physics mechanics</p><div class="note-tags"><span>Physics</span><span>Mechanics</span></div></div>
-            </div>
-        </div>
+        </section>
 
         <!-- Footer -->
-        <footer style="border-top:1px solid var(--border); padding:2rem 0 1rem; margin-top:3rem;">
-            <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:1rem; font-size:0.85rem; color:var(--text-secondary);">
-                <span>&copy; 2026 StudyFlow. Built with ❤️ by <a href="#" style="color:var(--primary); text-decoration:none;">Your Name</a></span>
-                <span>
-                    <a href="#" style="color:var(--text-secondary); text-decoration:none; margin-right:1rem;">About</a>
-                    <a href="#" style="color:var(--text-secondary); text-decoration:none; margin-right:1rem;">Privacy</a>
-                    <a href="#" style="color:var(--text-secondary); text-decoration:none;">Terms</a>
-                </span>
+        <footer class="footer">
+            <div class="footer-grid">
+                <div>
+                    <div class="logo" style="font-size:1.2rem; margin-bottom:0.6rem;">
+                        <div class="logo-icon" style="width:32px; height:32px;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                            </svg>
+                        </div>
+                        StudyFlow
+                    </div>
+                    <p style="color:var(--text-secondary); font-size:0.9rem; max-width:300px;">
+                        The smart study companion for students who want to stay organized and productive.
+                    </p>
+                </div>
+                <div>
+                    <h4>Product</h4>
+                    <ul>
+                        <li><a href="app.html">Dashboard</a></li>
+                        <li><a href="login.html">Login</a></li>
+                        <li><a href="login.html">Sign Up</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4>Company</h4>
+                    <ul>
+                        <li><a href="#">About</a></li>
+                        <li><a href="#">Contact</a></li>
+                        <li><a href="#">Privacy Policy</a></li>
+                        <li><a href="#">Terms of Service</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4>Connect</h4>
+                    <ul>
+                        <li><a href="https://github.com/yourusername" target="_blank">GitHub</a></li>
+                        <li><a href="https://linkedin.com/in/yourusername" target="_blank">LinkedIn</a></li>
+                        <li><a href="#">Twitter</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                &copy; 2026 StudyFlow. Built with ❤️ by <a href="#">Your Name</a>.
             </div>
         </footer>
-    </main>
+    </div>
 
-    <div id="modalContainer"></div>
-    <script src="script.js"></script>
     <script>
         lucide.createIcons();
     </script>
