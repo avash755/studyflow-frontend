@@ -1,3 +1,53 @@
+const DEMO_DATA = {
+    subjects: [
+        { id: 1, name: 'Computer Science', assignments_count: 8, notes_count: 24 },
+        { id: 2, name: 'Mathematics', assignments_count: 6, notes_count: 18 },
+        { id: 3, name: 'Physics', assignments_count: 5, notes_count: 15 },
+        { id: 4, name: 'Chemistry', assignments_count: 7, notes_count: 12 },
+        { id: 5, name: 'English Literature', assignments_count: 4, notes_count: 20 },
+        { id: 6, name: 'History', assignments_count: 6, notes_count: 16 }
+    ],
+    assignments: [
+        { id: 1, title: 'Data Structures - Binary Tree', subject: 'CS', due_date: '2026-04-24', completed: false },
+        { id: 2, title: 'Calculus Problem Set', subject: 'Math', due_date: '2026-04-28', completed: false },
+        { id: 3, title: 'Physics Lab Report', subject: 'Physics', due_date: '2026-04-20', completed: true }
+    ],
+    goals: [
+        { id: 1, text: 'Complete CS assignment', done: false },
+        { id: 2, text: 'Review calculus notes', done: false }
+    ],
+    reminders: [
+        { id: 1, title: 'Submit math homework', reminder_time: new Date(Date.now() + 3600000).toISOString(), repeat: 'none' }
+    ],
+    calendarEvents: [
+        { id: 1, title: 'Study Group', date_key: formatDateKey(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()), time: '15:00', color: '#4f46e5' }
+    ],
+    schedule: [
+        { subject: 'Computer Science', day: 0, start_time: '09:00', end_time: '10:30', location: 'Room 101', color_class: 'color-cs' },
+        { subject: 'Mathematics', day: 1, start_time: '11:00', end_time: '12:30', location: 'Room 205', color_class: 'color-math' },
+        { subject: 'Physics', day: 2, start_time: '13:00', end_time: '14:30', location: 'Lab 3', color_class: 'color-physics' },
+        { subject: 'Chemistry', day: 3, start_time: '09:00', end_time: '10:30', location: 'Lab 1', color_class: 'color-chemistry' },
+        { subject: 'English Literature', day: 4, start_time: '14:00', end_time: '15:30', location: 'Room 310', color_class: 'color-english' }
+    ],
+    upcomingDeadlines: [
+        { title: 'Data Structures Assignment', subject: 'CS', due: 'Apr 24', urgency: 'urgent' },
+        { title: 'Calculus Midterm', subject: 'Math', due: 'Apr 28', urgency: 'warning' },
+        { title: 'Research Paper Draft', subject: 'English', due: 'May 03', urgency: 'normal' }
+    ],
+    recentActivity: [
+        { type: 'assignment_completed', message: 'Completed Physics Lab Report', created_at: new Date(Date.now() - 7200000).toISOString() },
+        { type: 'subject_added', message: 'Added Chemistry notes', created_at: new Date(Date.now() - 18000000).toISOString() },
+        { type: 'study_session_complete', message: 'Studied Calculus 3h', created_at: new Date(Date.now() - 86400000).toISOString() }
+    ],
+    stats: {
+        activeSubjects: 6,
+        pendingTasks: 12,
+        studyTime: '24h',
+        completion: '85%'
+    }
+};
+
+
 // ========== GLOBAL HELPERS ==========
 function escapeHtml(str) {
     if (!str) return '';
