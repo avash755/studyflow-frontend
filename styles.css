@@ -1339,3 +1339,70 @@ body {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
 }
+
+/* ---------- Lucide Icons ---------- */
+[data-lucide] {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
+    display: inline-block;
+    vertical-align: middle;
+}
+.stat-icon [data-lucide] {
+    width: 24px;
+    height: 24px;
+    stroke-width: 2;
+    color: white;
+}
+.btn [data-lucide] {
+    width: 18px;
+    height: 18px;
+}
+.nav-link [data-lucide] {
+    width: 20px;
+    height: 20px;
+    stroke: currentColor;
+}
+.timer-btn [data-lucide],
+.steady-btn [data-lucide] {
+    width: 16px;
+    height: 16px;
+}
+.quick-action-btn [data-lucide] {
+    width: 28px;
+    height: 28px;
+    stroke-width: 1.5;
+}
+.xp-card [data-lucide] {
+    color: white;
+}
+/* Override dark mode toggle */
+.dark-mode-toggle [data-lucide] {
+    width: 24px;
+    height: 24px;
+}
+
+/* ---------- Empty state improvements ---------- */
+.empty-state {
+    text-align: center;
+    padding: 2rem 1.5rem;
+    color: var(--text-tertiary);
+}
+.empty-state [data-lucide] {
+    width: 48px;
+    height: 48px;
+    stroke-width: 1.5;
+    color: var(--text-muted);
+    margin-bottom: 0.8rem;
+}
+.empty-state h3 {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    margin-bottom: 0.4rem;
+    color: var(--text-primary);
+}
+.empty-state p {
+    font-size: 0.9rem;
+    max-width: 300px;
+    margin: 0 auto 1rem;
+}

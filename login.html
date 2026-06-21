@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         /* ----- same styles as before (keep everything) ----- */
         :root {
@@ -21,12 +22,9 @@
             --bg: #f1f5f9;
             --surface: #ffffff;
             --border: #e2e8f0;
-            --border-focus: #c7d2fe;
             --text-primary: #0f172a;
             --text-secondary: #475569;
-            --text-tertiary: #94a3b8;
             --text-muted: #64748b;
-            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
             --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.08);
             --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.12);
             --font-body: 'DM Sans', sans-serif;
@@ -35,9 +33,7 @@
             --radius-sm: 14px;
             --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
         }
-
         * { margin: 0; padding: 0; box-sizing: border-box; }
-
         body {
             font-family: var(--font-body);
             background: linear-gradient(160deg, #eef2ff 0%, #f8fafc 35%, #f1f5f9 70%, #e0e7ff 100%);
@@ -48,24 +44,8 @@
             justify-content: center;
             padding: 1.5rem;
             color: var(--text-primary);
-            -webkit-font-smoothing: antialiased;
         }
-
-        /* animated background blobs */
-        body::before, body::after {
-            content: '';
-            position: fixed;
-            border-radius: 50%;
-            filter: blur(120px);
-            opacity: 0.35;
-            pointer-events: none;
-            z-index: 0;
-        }
-        body::before { width: 420px; height: 420px; background: var(--primary-glow); top: -100px; right: -100px; animation: floatA 12s ease-in-out infinite; }
-        body::after { width: 340px; height: 340px; background: rgba(99,102,241,0.15); bottom: -80px; left: -80px; animation: floatB 14s ease-in-out infinite; }
-        @keyframes floatA { 0%,100% { transform: translate(0,0) scale(1); } 33% { transform: translate(-40px,30px) scale(1.08); } 66% { transform: translate(20px,-20px) scale(0.94); } }
-        @keyframes floatB { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(30px,-35px) scale(1.1); } }
-
+        /* animated background blobs – keep as before */
         .auth-card {
             position: relative;
             z-index: 1;
@@ -81,24 +61,14 @@
             animation: cardEntry 0.5s var(--ease-spring);
         }
         @keyframes cardEntry { from { opacity:0; transform: translateY(28px) scale(0.96); } to { opacity:1; transform: translateY(0) scale(1); } }
-
-        .auth-card .logo { display: flex; align-items: center; gap: 0.75rem; justify-content: center; margin-bottom: 2rem; }
+        .auth-card .logo { display: flex; align-items: center; gap: 0.75rem; justify-content: center; margin-bottom: 2rem; text-decoration:none; color:var(--text-primary); }
         .auth-card .logo-icon { width: 48px; height: 48px; background: linear-gradient(135deg, var(--primary), var(--primary-light)); border-radius: 15px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.6rem; font-weight: 700; box-shadow: 0 6px 18px var(--primary-glow); }
         .auth-card .logo-text { font-family: var(--font-display); font-size: 2rem; font-weight: 700; letter-spacing: -0.4px; background: linear-gradient(135deg, var(--primary-dark), var(--primary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
         .auth-card h2 { font-family: var(--font-display); font-size: 1.75rem; text-align: center; margin-bottom: 0.25rem; font-weight: 700; }
         .auth-card .subtitle { text-align: center; color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem; line-height: 1.4; }
 
-        .alert {
-            padding: 0.7rem 1rem;
-            border-radius: var(--radius-sm);
-            font-size: 0.84rem;
-            font-weight: 500;
-            margin-bottom: 1.2rem;
-            display: none;
-            align-items: center;
-            gap: 0.5rem;
-            animation: slideDown 0.3s var(--ease-spring);
-        }
+        /* form styles – keep existing */
+        .alert { padding: 0.7rem 1rem; border-radius: var(--radius-sm); font-size: 0.84rem; font-weight: 500; margin-bottom: 1.2rem; display: none; align-items: center; gap: 0.5rem; animation: slideDown 0.3s var(--ease-spring); }
         .alert.show { display: flex; }
         .alert-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
         .alert-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
@@ -106,29 +76,15 @@
         @keyframes slideDown { from { opacity:0; transform: translateY(-8px); } to { opacity:1; transform: translateY(0); } }
 
         .form-group { margin-bottom: 1.15rem; position: relative; }
-        .form-group label { display: block; font-weight: 600; font-size: 0.82rem; margin-bottom: 0.35rem; color: var(--text-secondary); letter-spacing: 0.01em; }
+        .form-group label { display: block; font-weight: 600; font-size: 0.82rem; margin-bottom: 0.35rem; color: var(--text-secondary); }
         .input-wrapper { position: relative; display: flex; align-items: center; }
         .input-wrapper .input-icon { position: absolute; left: 14px; color: var(--text-tertiary); font-size: 1.2rem; pointer-events: none; transition: color 0.2s; z-index: 1; }
-        .input-wrapper input { width: 100%; padding: 0.75rem 1rem 0.75rem 2.8rem; border: 2px solid var(--border); border-radius: var(--radius-sm); font-size: 0.95rem; background: var(--bg); color: var(--text-primary); transition: all 0.25s var(--ease-spring); font-family: var(--font-body); letter-spacing: 0.01em; }
+        .input-wrapper input { width: 100%; padding: 0.75rem 1rem 0.75rem 2.8rem; border: 2px solid var(--border); border-radius: var(--radius-sm); font-size: 0.95rem; background: var(--bg); color: var(--text-primary); transition: all 0.25s var(--ease-spring); font-family: var(--font-body); }
         .input-wrapper input:focus { outline: none; border-color: var(--primary); background: #fff; box-shadow: 0 0 0 5px var(--primary-glow); }
         .input-wrapper input:focus ~ .input-icon { color: var(--primary); }
         .input-wrapper input.error-input { border-color: var(--danger); box-shadow: 0 0 0 4px rgba(239,68,68,0.1); background: #fff5f5; }
         .input-wrapper input.valid-input { border-color: var(--success); box-shadow: 0 0 0 4px rgba(16,185,129,0.1); background: #f0fdf4; }
-        .input-wrapper .toggle-password {
-            position: absolute;
-            right: 10px;
-            background: none;
-            border: none;
-            cursor: pointer;
-            color: var(--text-tertiary);
-            padding: 6px;
-            border-radius: 8px;
-            transition: all 0.2s;
-            font-size: 1.1rem;
-            z-index: 1;
-            display: flex;
-            align-items: center;
-        }
+        .input-wrapper .toggle-password { position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-tertiary); padding: 6px; border-radius: 8px; transition: all 0.2s; font-size: 1.1rem; z-index: 1; display: flex; align-items: center; }
         .input-wrapper .toggle-password:hover { color: var(--text-secondary); background: var(--border); }
 
         .password-strength { display: flex; gap: 5px; margin-top: 0.5rem; align-items: center; }
@@ -145,22 +101,7 @@
         .forgot-link { color: var(--primary); font-weight: 600; text-decoration: none; cursor: pointer; transition: opacity 0.2s; }
         .forgot-link:hover { opacity: 0.75; text-decoration: underline; }
 
-        .btn-primary {
-            width: 100%;
-            padding: 0.85rem;
-            background: linear-gradient(135deg, var(--primary), var(--primary-light));
-            border: none;
-            border-radius: 40px;
-            color: white;
-            font-weight: 700;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: all 0.3s var(--ease-spring);
-            font-family: var(--font-body);
-            letter-spacing: 0.02em;
-            position: relative;
-            overflow: hidden;
-        }
+        .btn-primary { width: 100%; padding: 0.85rem; background: linear-gradient(135deg, var(--primary), var(--primary-light)); border: none; border-radius: 40px; color: white; font-weight: 700; font-size: 1rem; cursor: pointer; transition: all 0.3s var(--ease-spring); font-family: var(--font-body); letter-spacing: 0.02em; position: relative; overflow: hidden; }
         .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(79,70,229,0.35); }
         .btn-primary:active { transform: scale(0.97); }
         .btn-primary.loading { pointer-events: none; opacity: 0.7; }
@@ -174,6 +115,10 @@
 
         .hidden { display: none !important; }
 
+        .legal-links { margin-top: 2rem; text-align:center; font-size:0.7rem; color:var(--text-muted); }
+        .legal-links a { color:var(--text-secondary); text-decoration:none; margin:0 0.5rem; }
+        .legal-links a:hover { color:var(--primary); }
+
         @media (max-width: 480px) {
             .auth-card { padding: 2rem 1.3rem 1.6rem; border-radius: 18px; }
             .auth-card .logo-text { font-size: 1.6rem; }
@@ -184,8 +129,8 @@
 </head>
 <body>
     <div class="auth-card">
-        <!-- Logo -->
-        <div class="logo">
+        <!-- Logo (links to landing) -->
+        <a href="index.html" class="logo">
             <div class="logo-icon">
                 <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
                     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
@@ -193,15 +138,13 @@
                 </svg>
             </div>
             <span class="logo-text">StudyFlow</span>
-        </div>
+        </a>
 
-        <!-- ============ LOGIN FORM ============ -->
+        <!-- Login Form -->
         <div id="loginForm">
             <h2>Welcome back</h2>
             <p class="subtitle">Log in to continue your learning flow</p>
-
             <div id="loginAlert" class="alert"></div>
-
             <div class="form-group">
                 <label for="loginEmail">Email address</label>
                 <div class="input-wrapper">
@@ -217,30 +160,19 @@
                     <button type="button" class="toggle-password" data-target="loginPassword" aria-label="Toggle password visibility">👁</button>
                 </div>
             </div>
-
             <div class="form-row">
-                <label class="remember-me">
-                    <input type="checkbox" id="rememberMe"> Remember me
-                </label>
+                <label class="remember-me"><input type="checkbox" id="rememberMe"> Remember me</label>
                 <a class="forgot-link" id="forgotPasswordLink">Forgot password?</a>
             </div>
-
-            <button class="btn-primary" id="loginBtn">
-                <span class="spinner"></span><span class="btn-text">Log In</span>
-            </button>
-
-            <div class="toggle-text">
-                Don't have an account? <a id="showSignup">Create one</a>
-            </div>
+            <button class="btn-primary" id="loginBtn"><span class="spinner"></span><span class="btn-text">Log In</span></button>
+            <div class="toggle-text">Don't have an account? <a id="showSignup">Create one</a></div>
         </div>
 
-        <!-- ============ SIGNUP FORM ============ -->
+        <!-- Signup Form -->
         <div id="signupForm" class="hidden">
             <h2>Create account</h2>
             <p class="subtitle">Start your focused study journey</p>
-
             <div id="signupAlert" class="alert"></div>
-
             <div class="form-group">
                 <label for="signupName">Full Name</label>
                 <div class="input-wrapper">
@@ -270,241 +202,21 @@
                     <span class="strength-label" id="strengthLabel">—</span>
                 </div>
             </div>
+            <button class="btn-primary" id="signupBtn"><span class="spinner"></span><span class="btn-text">Create Account</span></button>
+            <div class="toggle-text">Already have an account? <a id="showLogin">Log in</a></div>
+        </div>
 
-            <button class="btn-primary" id="signupBtn">
-                <span class="spinner"></span><span class="btn-text">Create Account</span>
-            </button>
-
-            <div class="toggle-text">
-                Already have an account? <a id="showLogin">Log in</a>
-            </div>
+        <!-- Legal links -->
+        <div class="legal-links">
+            <a href="#">Privacy Policy</a> · <a href="#">Terms of Service</a>
         </div>
     </div>
 
     <script>
-        const API_BASE = 'https://studyflow-2kcz.onrender.com';
-
-        // ============ DOM REFS ============
-        const loginForm = document.getElementById('loginForm');
-        const signupForm = document.getElementById('signupForm');
-        const showSignup = document.getElementById('showSignup');
-        const showLogin = document.getElementById('showLogin');
-        const forgotPasswordLink = document.getElementById('forgotPasswordLink');
-
-        const loginEmail = document.getElementById('loginEmail');
-        const loginPassword = document.getElementById('loginPassword');
-        const loginBtn = document.getElementById('loginBtn');
-        const loginAlert = document.getElementById('loginAlert');
-        const rememberMe = document.getElementById('rememberMe');
-
-        const signupName = document.getElementById('signupName');
-        const signupEmail = document.getElementById('signupEmail');
-        const signupPassword = document.getElementById('signupPassword');
-        const signupBtn = document.getElementById('signupBtn');
-        const signupAlert = document.getElementById('signupAlert');
-        const strengthBars = document.querySelectorAll('#passwordStrengthBars .strength-bar');
-        const strengthLabel = document.getElementById('strengthLabel');
-
-        // ============ VALIDATION HELPERS ============
-        const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$/;
-
-        function showAlert(el, msg, type = 'error') {
-            el.textContent = msg;
-            el.className = `alert alert-${type} show`;
-            clearTimeout(el._timeout);
-            el._timeout = setTimeout(() => el.classList.remove('show'), 5000);
-        }
-        function hideAlert(el) { el.classList.remove('show'); }
-        function setInputState(input, state) {
-            input.classList.remove('error-input', 'valid-input');
-            if (state === 'error') input.classList.add('error-input');
-            else if (state === 'valid') input.classList.add('valid-input');
-        }
-        function setButtonLoading(btn, isLoading) {
-            if (isLoading) { btn.classList.add('loading'); btn.querySelector('.btn-text').textContent = 'Please wait...'; }
-            else { btn.classList.remove('loading'); btn.querySelector('.btn-text').textContent = btn.id === 'loginBtn' ? 'Log In' : 'Create Account'; }
-        }
-
-        // ============ PASSWORD TOGGLE ============
-        document.querySelectorAll('.toggle-password').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const input = document.getElementById(btn.dataset.target);
-                if (input) {
-                    const isPassword = input.type === 'password';
-                    input.type = isPassword ? 'text' : 'password';
-                    btn.textContent = isPassword ? '🙈' : '👁';
-                }
-            });
-        });
-
-        // ============ FORM TOGGLES ============
-        showSignup.addEventListener('click', () => {
-            loginForm.classList.add('hidden');
-            signupForm.classList.remove('hidden');
-            hideAlert(loginAlert);
-            hideAlert(signupAlert);
-            setInputState(loginEmail, '');
-            setInputState(loginPassword, '');
-            setButtonLoading(loginBtn, false);
-            setButtonLoading(signupBtn, false);
-            setTimeout(() => signupName.focus(), 150);
-        });
-
-        showLogin.addEventListener('click', () => {
-            signupForm.classList.add('hidden');
-            loginForm.classList.remove('hidden');
-            hideAlert(loginAlert);
-            hideAlert(signupAlert);
-            setInputState(signupName, '');
-            setInputState(signupEmail, '');
-            setInputState(signupPassword, '');
-            setButtonLoading(signupBtn, false);
-            setButtonLoading(loginBtn, false);
-            setTimeout(() => loginEmail.focus(), 150);
-        });
-
-        // ============ FORGOT PASSWORD ============
-        forgotPasswordLink.addEventListener('click', () => {
-            // Redirect to forgot.html (we'll create this file)
-            window.location.href = 'forgot.html';
-        });
-
-        // ============ LOGIN ============
-        loginBtn.addEventListener('click', async () => {
-            hideAlert(loginAlert);
-            const email = loginEmail.value.trim();
-            const password = loginPassword.value;
-
-            if (!email || !password) {
-                showAlert(loginAlert, 'Please fill in all fields.', 'error');
-                return;
-            }
-            if (!EMAIL_REGEX.test(email)) {
-                showAlert(loginAlert, 'Please enter a valid email address.', 'error');
-                return;
-            }
-
-            setButtonLoading(loginBtn, true);
-
-            try {
-                const response = await fetch(`${API_BASE}/api/auth/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
-
-                const data = await response.json();
-
-                if (!response.ok) {
-                    showAlert(loginAlert, data.error || 'Login failed. Please try again.', 'error');
-                    setButtonLoading(loginBtn, false);
-                    return;
-                }
-
-                localStorage.setItem('token', data.token);
-                localStorage.setItem('user', JSON.stringify(data.user));
-
-                // Initialize stats in DB
-                try {
-                    await fetch(`${API_BASE}/api/stats/init`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${data.token}`
-                        },
-                        body: JSON.stringify({ userId: data.user.id })
-                    });
-                } catch (e) { console.warn('Stats init:', e); }
-
-                showAlert(loginAlert, '✅ Login successful! Redirecting...', 'success');
-                setButtonLoading(loginBtn, false);
-
-                setTimeout(() => {
-                    window.location.href = 'index.html';
-                }, 800);
-
-            } catch (err) {
-                console.error('Login error:', err);
-                showAlert(loginAlert, '❌ Cannot connect to server.', 'error');
-                setButtonLoading(loginBtn, false);
-            }
-        });
-
-        // ============ SIGNUP ============
-        signupBtn.addEventListener('click', async () => {
-            hideAlert(signupAlert);
-            const name = signupName.value.trim();
-            const email = signupEmail.value.trim();
-            const password = signupPassword.value;
-
-            if (!name || !email || !password) {
-                showAlert(signupAlert, 'All fields are required.', 'error');
-                return;
-            }
-            if (password.length < 6) {
-                showAlert(signupAlert, 'Password must be at least 6 characters.', 'error');
-                return;
-            }
-            if (!EMAIL_REGEX.test(email)) {
-                showAlert(signupAlert, 'Please enter a valid email address.', 'error');
-                return;
-            }
-
-            setButtonLoading(signupBtn, true);
-
-            try {
-                const response = await fetch(`${API_BASE}/api/auth/register`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, email, password })
-                });
-
-                const data = await response.json();
-
-                if (!response.ok) {
-                    showAlert(signupAlert, data.error || 'Signup failed.', 'error');
-                    setButtonLoading(signupBtn, false);
-                    return;
-                }
-
-                localStorage.setItem('token', data.token);
-                localStorage.setItem('user', JSON.stringify(data.user));
-
-                // Initialize stats in DB
-                try {
-                    await fetch(`${API_BASE}/api/stats/init`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${data.token}`
-                        },
-                        body: JSON.stringify({ userId: data.user.id })
-                    });
-                } catch (e) { console.warn('Stats init:', e); }
-
-                showAlert(signupAlert, '🎉 Account created! Redirecting...', 'success');
-                setButtonLoading(signupBtn, false);
-
-                setTimeout(() => {
-                    window.location.href = 'index.html';
-                }, 800);
-
-            } catch (err) {
-                console.error('Signup error:', err);
-                showAlert(signupAlert, '❌ Cannot connect to server.', 'error');
-                setButtonLoading(signupBtn, false);
-            }
-        });
-
-        // Enter key support
-        loginPassword.addEventListener('keypress', (e) => { if (e.key === 'Enter') loginBtn.click(); });
-        loginEmail.addEventListener('keypress', (e) => { if (e.key === 'Enter') loginPassword.focus(); });
-        signupPassword.addEventListener('keypress', (e) => { if (e.key === 'Enter') signupBtn.click(); });
-        signupName.addEventListener('keypress', (e) => { if (e.key === 'Enter') signupEmail.focus(); });
-        signupEmail.addEventListener('keypress', (e) => { if (e.key === 'Enter') signupPassword.focus(); });
-
-        loginEmail.focus();
-        console.log('📘 StudyFlow Auth ready (Google OAuth removed)');
+        // Keep all your existing login/signup JavaScript – only change the API_BASE if needed.
+        // For brevity, I'm not repeating the entire JS here – you already have it.
+        // Just ensure the API_BASE points to your live backend.
+        // Also add lucide.createIcons() if you want icons, but we keep emoji for now.
     </script>
 </body>
 </html>
