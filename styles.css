@@ -468,6 +468,8 @@ body {
     font-family: 'Courier New', monospace;
     margin: 0.5rem 0;
     letter-spacing: 2px;
+    color: var(--primary);
+    text-shadow: 0 0 20px var(--primary-glow);
 }
 .timer-controls {
     display: flex;
@@ -489,8 +491,14 @@ body {
 }
 .timer-btn.start,
 .steady-btn.start {
-    background: var(--success);
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
     color: white;
+    box-shadow: 0 4px 12px var(--primary-glow);
+}
+.timer-btn.start:hover,
+.steady-btn.start:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px var(--primary-glow);
 }
 .timer-btn.pause,
 .steady-btn.pause {
