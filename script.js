@@ -30,7 +30,6 @@ function timeAgo(dateString) {
     return Math.floor(diff / 86400) + 'd ago';
 }
 
-// ---------- Lucide refresh ----------
 function refreshIcons() {
     if (typeof lucide !== 'undefined' && lucide.createIcons) {
         lucide.createIcons();
@@ -111,6 +110,44 @@ function requireLogin() {
         if (e.target === overlay) overlay.remove();
     });
     return false;
+}
+
+// ========== FORMAT HELPERS ==========
+function formatDateKey(year, month, day) {
+    return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function parseDateKey(key) {
+    const [y, m, d] = key.split('-').map(Number);
+    return { year: y, month: m - 1, day: d };
+}
+
+// ========== OPEN MODAL ==========
+function openModal(title, contentHtml, onSave) {
+    const container = document.getElementById('modalContainer');
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal">
+            <h3>${title}</h3>
+            <div class="modal-body">${contentHtml}</div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary modal-cancel">Cancel</button>
+                <button class="btn btn-primary modal-save">Save</button>
+            </div>
+        </div>`;
+    container.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('.modal-cancel').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close();
+    });
+    overlay.querySelector('.modal-save').addEventListener('click', () => {
+        if (onSave(overlay)) close();
+    });
+    const escHandler = (e) => { if (e.key === 'Escape') { close();
+            document.removeEventListener('keydown', escHandler); } };
+    document.addEventListener('keydown', escHandler);
 }
 
 // ========== NOTIFICATIONS ==========
@@ -417,9 +454,1014 @@ function playBeep(audioCtx) {
     } catch (e) { /* ignore */ }
 }
 
+// ========== LOAD SUBJECTS ==========
+async function loadSubjects() {
+    const container = document.querySelector('.subjects-grid');
+    if (!container) return;
+    if (!isLoggedIn) {
+        container.innerHTML = DEMO_DATA.subjects.map(s => `
+            <div class="subject-card">
+                <h3>${escapeHtml(s.name)}</h3>
+                <p>${s.assignments_count} assignments · ${s.notes_count} notes</p>
+            </div>
+        `).join('');
+        refreshIcons();
+        return;
+    }
+    try {
+        const res = await fetch(`${API_BASE}/api/subjects?userId=${user.id}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!res.ok) throw new Error('Failed to fetch subjects');
+        const subjects = await res.json();
+        if (subjects.length === 0) {
+            container.innerHTML = `<div class="empty-state"><i data-lucide="book-open"></i><p>No subjects yet — add your first one!</p></div>`;
+            refreshIcons();
+            return;
+        }
+        container.innerHTML = subjects.map(s => `
+            <div class="subject-card">
+                <h3>${escapeHtml(s.name)}</h3>
+                <p>${s.assignments_count || 0} assignments · ${s.notes_count || 0} notes</p>
+            </div>
+        `).join('');
+        refreshIcons();
+    } catch (err) {
+        console.error('Load subjects error:', err);
+        container.innerHTML = '<p style="color:var(--danger);">Failed to load.</p>';
+    }
+}
+
+// ========== RENDER ASSIGNMENTS ==========
+async function renderAssignments(filter = "all") {
+    const container = document.getElementById('assignmentsList');
+    if (!container) return;
+    if (!isLoggedIn) {
+        let filtered = DEMO_DATA.assignments;
+        if (filter === 'pending') filtered = filtered.filter(a => !a.completed);
+        else if (filter === 'completed') filtered = filtered.filter(a => a.completed);
+        container.innerHTML = filtered.map(a => `
+            <div class="assignment-item">
+                <input type="checkbox" class="assign-check" disabled ${a.completed ? 'checked' : ''}>
+                <div>
+                    <strong>${escapeHtml(a.title)}</strong>
+                    <div style="font-size:0.8rem">${escapeHtml(a.subject)} • Due ${a.due_date ? new Date(a.due_date).toLocaleDateString('en-US', { month:'short', day:'numeric' }) : 'No date'}</div>
+                </div>
+            </div>
+        `).join('');
+        return;
+    }
+    try {
+        const url = `${API_BASE}/api/assignments?userId=${user.id}&filter=${filter}`;
+        const res = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!res.ok) throw new Error('Failed to fetch assignments');
+        const data = await res.json();
+        assignmentsData = data;
+        if (assignmentsData.length === 0) {
+            container.innerHTML = `<div class="empty-state"><i data-lucide="clipboard-list"></i><p>No assignments — create your first one!</p></div>`;
+            refreshIcons();
+            return;
+        }
+        container.innerHTML = assignmentsData.map(a => `
+            <div class="assignment-item">
+                <input type="checkbox" class="assign-check" data-id="${a.id}" ${a.completed ? 'checked' : ''}>
+                <div>
+                    <strong>${escapeHtml(a.title)}</strong>
+                    <div style="font-size:0.8rem">${escapeHtml(a.subject)} • Due ${a.due_date ? new Date(a.due_date).toLocaleDateString('en-US', { month:'short', day:'numeric' }) : 'No date'}</div>
+                </div>
+            </div>
+        `).join('');
+        container.querySelectorAll('.assign-check').forEach(cb => {
+            cb.addEventListener('change', async (e) => {
+                const id = parseInt(cb.dataset.id);
+                const checked = cb.checked;
+                await toggleAssignment(id, checked);
+            });
+        });
+        refreshIcons();
+    } catch (err) {
+        console.error('Render assignments error:', err);
+        container.innerHTML = '<p style="color:var(--danger);">Failed to load.</p>';
+    }
+}
+
+async function toggleAssignment(id, completed) {
+    if (!requireLogin()) return;
+    try {
+        const res = await fetch(`${API_BASE}/api/assignments/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ userId: user.id, completed })
+        });
+        if (!res.ok) throw new Error('Failed');
+        if (completed) addXP(5);
+        const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
+        await renderAssignments(activeFilter);
+        updateStats();
+    } catch (err) {
+        console.error('Toggle assignment error:', err);
+        alert('Failed to update assignment.');
+    }
+}
+
+// ========== GOALS ==========
+async function renderGoals() {
+    const container = document.getElementById('goalsList');
+    if (!container) return;
+    if (!isLoggedIn) {
+        container.innerHTML = DEMO_DATA.goals.map(g => `
+            <div class="goal-item">
+                <input type="checkbox" class="goal-check" disabled ${g.done ? 'checked' : ''}>
+                <span style="flex:1;${g.done ? 'text-decoration:line-through;opacity:0.6' : ''}">${escapeHtml(g.text)}</span>
+            </div>
+        `).join('');
+        return;
+    }
+    try {
+        const res = await fetch(`${API_BASE}/api/goals?userId=${user.id}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!res.ok) throw new Error('Failed to fetch goals');
+        const data = await res.json();
+        goals = data;
+        if (goals.length === 0) {
+            container.innerHTML = `<div class="empty-state"><i data-lucide="target"></i><p>No goals yet — set your first one!</p></div>`;
+            refreshIcons();
+            return;
+        }
+        container.innerHTML = goals.map(g => `
+            <div class="goal-item">
+                <input type="checkbox" class="goal-check" data-id="${g.id}" ${g.done ? 'checked' : ''}>
+                <span style="flex:1;${g.done ? 'text-decoration:line-through;opacity:0.6' : ''}">${escapeHtml(g.text)}</span>
+                <button class="del-goal" data-id="${g.id}">🗑️</button>
+            </div>
+        `).join('');
+        container.querySelectorAll('.goal-check').forEach(cb => {
+            cb.addEventListener('change', async (e) => {
+                const id = parseInt(cb.dataset.id);
+                const checked = cb.checked;
+                await toggleGoal(id, checked);
+            });
+        });
+        container.querySelectorAll('.del-goal').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = parseInt(btn.dataset.id);
+                await deleteGoal(id);
+            });
+        });
+        refreshIcons();
+    } catch (err) {
+        console.error('Render goals error:', err);
+        container.innerHTML = '<p style="color:var(--danger);">Failed to load.</p>';
+    }
+}
+
+async function toggleGoal(id, done) {
+    if (!requireLogin()) return;
+    try {
+        const res = await fetch(`${API_BASE}/api/goals/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ userId: user.id, done })
+        });
+        if (!res.ok) throw new Error('Failed');
+        if (done) addXP(5);
+        await renderGoals();
+    } catch (err) { alert('Failed to update goal.'); }
+}
+
+async function deleteGoal(id) {
+    if (!requireLogin()) return;
+    if (!confirm('Delete this goal?')) return;
+    try {
+        const res = await fetch(`${API_BASE}/api/goals/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ userId: user.id })
+        });
+        if (!res.ok) throw new Error('Failed');
+        await renderGoals();
+    } catch (err) { alert('Failed to delete goal.'); }
+}
+
+async function addGoal() {
+    if (!requireLogin()) return;
+    const input = document.getElementById('newGoalInput');
+    const text = input.value.trim();
+    if (!text) return;
+    try {
+        const res = await fetch(`${API_BASE}/api/goals`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ userId: user.id, text })
+        });
+        if (!res.ok) throw new Error('Failed');
+        input.value = '';
+        await renderGoals();
+    } catch (err) { alert('Could not add goal.'); }
+}
+
+// ========== XP & GAMIFICATION ==========
+function addXP(amount) {
+    xp += amount;
+    let needed = level * 100;
+    while (xp >= needed) {
+        xp -= needed;
+        level++;
+        showNotification(`🎉 LEVEL UP! You reached Level ${level}! 🎉`);
+        needed = level * 100;
+    }
+    localStorage.setItem('xp', xp);
+    localStorage.setItem('level', level);
+    updateBadgesAndXP();
+}
+
+function updateBadgesAndXP() {
+    const xpFill = document.getElementById('xpFill');
+    const xpText = document.getElementById('xpText');
+    const levelEl = document.getElementById('levelDisplay');
+    const needed = level * 100;
+    if (xpFill) xpFill.style.width = `${(xp / needed) * 100}%`;
+    if (xpText) xpText.innerText = `${xp} / ${needed} XP`;
+    if (levelEl) levelEl.innerText = `Level ${level}`;
+    if (level >= 2 && !badges.find(b => b.name === 'Rising Star')) {
+        badges.push({ name: 'Rising Star', icon: '⭐' });
+        showNotification('🏅 Badge unlocked: Rising Star!');
+    }
+    if (level >= 5 && !badges.find(b => b.name === 'Scholar')) {
+        badges.push({ name: 'Scholar', icon: '📚' });
+        showNotification('🏅 Badge unlocked: Scholar!');
+    }
+    if (goals.filter(g => g.done).length >= 5 && !badges.find(b => b.name === 'Goal Getter')) {
+        badges.push({ name: 'Goal Getter', icon: '🎯' });
+        showNotification('🏅 Badge unlocked: Goal Getter!');
+    }
+    localStorage.setItem('badges', JSON.stringify(badges));
+    const bd = document.getElementById('badgesContainer');
+    if (bd) bd.innerHTML = badges.map(b => `<span>${b.icon} ${b.name}</span>`).join('');
+}
+
+// ========== CALENDAR ==========
+async function loadCalendarEvents() {
+    if (!isLoggedIn) {
+        calendarEvents = DEMO_DATA.calendarEvents.map((e, i) => ({ ...e, id: i + 1 }));
+        return;
+    }
+    try {
+        const response = await fetch(`${API_BASE}/api/calendar?userId=${user.id}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch events');
+        const data = await response.json();
+        calendarEvents = data;
+    } catch (err) {
+        console.error('Load calendar events error:', err);
+        calendarEvents = [];
+    }
+}
+
+async function renderCalendar() {
+    const grid = document.getElementById('calendarGrid');
+    const label = document.getElementById('calendarMonthLabel');
+    if (!grid || !label) return;
+
+    await loadCalendarEvents();
+
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    label.textContent = `${monthNames[calendarMonth]} ${calendarYear}`;
+
+    const dayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    let html = dayHeaders.map(d => `<div class="calendar-day-header">${d}</div>`).join('');
+
+    const firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
+    const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+    const daysInPrevMonth = new Date(calendarYear, calendarMonth, 0).getDate();
+    const today = new Date();
+    const todayKey = formatDateKey(today.getFullYear(), today.getMonth(), today.getDate());
+
+    const hasEvents = (key) => calendarEvents.some(e => e.date_key === key);
+
+    for (let i = firstDay - 1; i >= 0; i--) {
+        const d = daysInPrevMonth - i;
+        const key = formatDateKey(calendarYear, calendarMonth - 1, d);
+        html += `<div class="calendar-day other-month${hasEvents(key) ? ' has-events' : ''}" data-date-key="${key}">${d}</div>`;
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+        const key = formatDateKey(calendarYear, calendarMonth, d);
+        const isToday = key === todayKey;
+        const isSelected = selectedCalendarDate && formatDateKey(selectedCalendarDate.getFullYear(), selectedCalendarDate.getMonth(), selectedCalendarDate.getDate()) === key;
+        html += `<div class="calendar-day${isToday ? ' today' : ''}${isSelected ? ' selected' : ''}${hasEvents(key) ? ' has-events' : ''}" data-date-key="${key}">${d}</div>`;
+    }
+
+    const remaining = 42 - (firstDay + daysInMonth);
+    for (let d = 1; d <= remaining; d++) {
+        const key = formatDateKey(calendarYear, calendarMonth + 1, d);
+        html += `<div class="calendar-day other-month${hasEvents(key) ? ' has-events' : ''}" data-date-key="${key}">${d}</div>`;
+    }
+
+    grid.innerHTML = html;
+
+    grid.querySelectorAll('.calendar-day:not(.other-month)').forEach(dayEl => {
+        dayEl.addEventListener('click', () => {
+            const key = dayEl.dataset.dateKey;
+            const parsed = parseDateKey(key);
+            selectedCalendarDate = new Date(parsed.year, parsed.month, parsed.day);
+            renderCalendar();
+            renderEventsPanel();
+        });
+    });
+
+    grid.querySelectorAll('.calendar-day.other-month').forEach(dayEl => {
+        dayEl.addEventListener('click', () => {
+            const key = dayEl.dataset.dateKey;
+            const parsed = parseDateKey(key);
+            calendarYear = parsed.year;
+            calendarMonth = parsed.month;
+            selectedCalendarDate = new Date(parsed.year, parsed.month, parsed.day);
+            renderCalendar();
+            renderEventsPanel();
+        });
+    });
+
+    renderEventsPanel();
+}
+
+function renderEventsPanel() {
+    const panel = document.getElementById('calendarEventsPanel');
+    const label = document.getElementById('selectedDateLabel');
+    const list = document.getElementById('eventsList');
+    if (!panel || !label || !list) return;
+
+    if (!selectedCalendarDate) {
+        label.textContent = '—';
+        list.innerHTML = '<div class="no-events">Select a date to view events</div>';
+        return;
+    }
+
+    const key = formatDateKey(selectedCalendarDate.getFullYear(), selectedCalendarDate.getMonth(), selectedCalendarDate.getDate());
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    label.textContent = `${monthNames[selectedCalendarDate.getMonth()]} ${selectedCalendarDate.getDate()}, ${selectedCalendarDate.getFullYear()}`;
+
+    const events = calendarEvents.filter(e => e.date_key === key);
+
+    if (!events.length) {
+        list.innerHTML = '<div class="no-events">No events for this date</div>';
+    } else {
+        list.innerHTML = events.map((e) => {
+            return `
+                    <div class="event-item">
+                        <div class="event-color-dot" style="background:${escapeHtml(e.color || '#4f46e5')}"></div>
+                        <div class="event-info"><strong>${escapeHtml(e.title)}</strong>${e.time ? ` <small>(${escapeHtml(e.time)})</small>` : ''}</div>
+                        <button class="event-delete" data-event-id="${e.id}" aria-label="Delete event">✕</button>
+                    </div>`;
+        }).join('');
+
+        list.querySelectorAll('.event-delete').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!requireLogin()) return;
+                const eventId = parseInt(btn.dataset.eventId);
+                await deleteCalendarEvent(eventId);
+            });
+        });
+    }
+}
+
+async function deleteCalendarEvent(id) {
+    if (!requireLogin()) return;
+    if (!confirm('Delete this event?')) return;
+    try {
+        const response = await fetch(`${API_BASE}/api/calendar/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ userId: user.id })
+        });
+        if (!response.ok) throw new Error('Failed to delete event');
+        await renderCalendar();
+        showNotification('Event deleted');
+    } catch (err) {
+        console.error('Delete event error:', err);
+        alert('Failed to delete event.');
+    }
+}
+
+function initCalendar() {
+    const prevBtn = document.getElementById('calendarPrev');
+    const nextBtn = document.getElementById('calendarNext');
+    const todayBtn = document.getElementById('calendarTodayBtn');
+    const addBtn = document.getElementById('addEventBtn');
+
+    if (prevBtn) prevBtn.addEventListener('click', () => {
+        calendarMonth--;
+        if (calendarMonth < 0) { calendarMonth = 11;
+            calendarYear--; }
+        renderCalendar();
+    });
+    if (nextBtn) nextBtn.addEventListener('click', () => {
+        calendarMonth++;
+        if (calendarMonth > 11) { calendarMonth = 0;
+            calendarYear++; }
+        renderCalendar();
+    });
+    if (todayBtn) todayBtn.addEventListener('click', () => {
+        const now = new Date();
+        calendarYear = now.getFullYear();
+        calendarMonth = now.getMonth();
+        selectedCalendarDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        renderCalendar();
+    });
+
+    if (addBtn) {
+        addBtn.addEventListener('click', () => {
+            if (!requireLogin()) return;
+            const defaultKey = selectedCalendarDate ?
+                formatDateKey(selectedCalendarDate.getFullYear(), selectedCalendarDate.getMonth(), selectedCalendarDate.getDate()) :
+                formatDateKey(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+
+            openModal('Add Calendar Event', `
+                    <div class="form-group"><label>Event Title</label><input type="text" id="eventTitle" placeholder="E.g., Math Exam" required></div>
+                    <div class="form-group"><label>Date</label><input type="date" id="eventDate" value="${defaultKey}" required></div>
+                    <div class="form-group"><label>Time (optional)</label><input type="time" id="eventTime"></div>
+                    <div class="form-group"><label>Color</label><select id="eventColor">
+                        <option value="#4f46e5">Indigo</option>
+                        <option value="#ef4444">Red</option>
+                        <option value="#f59e0b">Amber</option>
+                        <option value="#10b981">Green</option>
+                        <option value="#3b82f6">Blue</option>
+                        <option value="#ec4899">Pink</option>
+                    </select></div>`,
+                async (overlay) => {
+                    const title = overlay.querySelector('#eventTitle').value.trim();
+                    const dateVal = overlay.querySelector('#eventDate').value;
+                    const timeVal = overlay.querySelector('#eventTime').value;
+                    const color = overlay.querySelector('#eventColor').value;
+
+                    if (!title) { showNotification('Please enter a title', true); return false; }
+                    if (!dateVal) { showNotification('Please select a date', true); return false; }
+
+                    try {
+                        const response = await fetch(`${API_BASE}/api/calendar`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            },
+                            body: JSON.stringify({
+                                userId: user.id,
+                                title: title,
+                                dateKey: dateVal,
+                                time: timeVal || null,
+                                color: color
+                            })
+                        });
+
+                        if (!response.ok) {
+                            const data = await response.json();
+                            showNotification(data.error || 'Failed to add event', true);
+                            return false;
+                        }
+
+                        await renderCalendar();
+                        showNotification('✅ Event added!');
+                        return true;
+                    } catch (err) {
+                        console.error('Add event error:', err);
+                        showNotification('Could not connect to server.', true);
+                        return false;
+                    }
+                }
+            );
+        });
+    }
+    renderCalendar();
+}
+
+// ========== CLASS SCHEDULE ==========
+async function loadSchedule() {
+    if (!isLoggedIn) {
+        scheduleClasses = DEMO_DATA.schedule.map((s, i) => ({ ...s, id: i + 1 }));
+        return;
+    }
+    try {
+        const response = await fetch(`${API_BASE}/api/schedule?userId=${user.id}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch schedule');
+        const data = await response.json();
+        scheduleClasses = data;
+    } catch (err) {
+        console.error('Load schedule error:', err);
+        scheduleClasses = [];
+    }
+}
+
+function getDefaultSchedule() {
+    return [
+        { subject: 'Computer Science', day: 0, startTime: '09:00', endTime: '10:30', location: 'Room 101',
+            colorClass: 'color-cs' },
+        { subject: 'Mathematics', day: 1, startTime: '11:00', endTime: '12:30', location: 'Room 205',
+            colorClass: 'color-math' },
+        { subject: 'Physics', day: 2, startTime: '13:00', endTime: '14:30', location: 'Lab 3',
+            colorClass: 'color-physics' },
+        { subject: 'Chemistry', day: 3, startTime: '09:00', endTime: '10:30', location: 'Lab 1',
+            colorClass: 'color-chemistry' },
+        { subject: 'English Literature', day: 4, startTime: '14:00', endTime: '15:30', location: 'Room 310',
+            colorClass: 'color-english' },
+    ];
+}
+
+async function renderSchedule() {
+    const grid = document.getElementById('scheduleGrid');
+    const legend = document.getElementById('scheduleLegend');
+    if (!grid) return;
+
+    await loadSchedule();
+
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    const timeSlots = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
+
+    let html = '<div class="schedule-time-label">Time</div>';
+    days.forEach(d => { html += `<div class="schedule-day-header">${d}</div>`; });
+
+    timeSlots.forEach(time => {
+        html += `<div class="schedule-time-label">${time}</div>`;
+        for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
+            const classesInSlot = scheduleClasses.filter(c => c.day === dayIdx && c.start_time === time);
+            html += '<div class="schedule-cell">';
+            classesInSlot.forEach(cls => {
+                html += `
+                        <div class="schedule-class-card ${cls.color_class || 'color-default'}" 
+                             title="${escapeHtml(cls.subject)} - ${escapeHtml(cls.location)}">
+                            <div class="class-subject">${escapeHtml(cls.subject)}</div>
+                            <div>${cls.start_time}-${cls.end_time}</div>
+                            <div class="class-location">${escapeHtml(cls.location || '')}</div>
+                        </div>`;
+            });
+            html += '</div>';
+        }
+    });
+
+    grid.innerHTML = html;
+
+    if (legend) {
+        const uniqueSubjects = [...new Set(scheduleClasses.map(c => c.subject))];
+        const dotColors = {
+            'color-cs': '#0891b2',
+            'color-math': '#6366f1',
+            'color-physics': '#d97706',
+            'color-chemistry': '#059669',
+            'color-english': '#be185d',
+            'color-history': '#7c3aed',
+            'color-default': '#4f46e5'
+        };
+        legend.innerHTML = uniqueSubjects.map(s => {
+            const cc = scheduleClasses.find(c => c.subject === s)?.color_class || 'color-default';
+            return `<div class="schedule-legend-item"><div class="schedule-legend-dot" style="background:${dotColors[cc] || '#4f46e5'}"></div>${escapeHtml(s)}</div>`;
+        }).join('');
+    }
+}
+
+function initSchedule() {
+    renderSchedule();
+
+    const addBtn = document.getElementById('addClassBtn');
+    const resetBtn = document.getElementById('resetScheduleBtn');
+
+    if (addBtn) {
+        addBtn.addEventListener('click', () => {
+            if (!requireLogin()) return;
+            openModal('Add Class', `
+                    <div class="form-group"><label>Subject</label><input type="text" id="classSubject" placeholder="E.g., Biology" required></div>
+                    <div class="form-group"><label>Day</label>
+                        <select id="classDay">
+                            <option value="0">Monday</option>
+                            <option value="1">Tuesday</option>
+                            <option value="2">Wednesday</option>
+                            <option value="3">Thursday</option>
+                            <option value="4">Friday</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Start Time</label><input type="time" id="classStart" value="09:00" required></div>
+                    <div class="form-group"><label>End Time</label><input type="time" id="classEnd" value="10:30" required></div>
+                    <div class="form-group"><label>Location</label><input type="text" id="classLocation" placeholder="E.g., Room 101"></div>
+                    <div class="form-group"><label>Color</label>
+                        <select id="classColor">
+                            <option value="color-default">Indigo</option>
+                            <option value="color-cs">Teal</option>
+                            <option value="color-math">Purple</option>
+                            <option value="color-physics">Amber</option>
+                            <option value="color-chemistry">Green</option>
+                            <option value="color-english">Pink</option>
+                            <option value="color-history">Violet</option>
+                        </select>
+                    </div>`,
+                async (overlay) => {
+                    const subject = overlay.querySelector('#classSubject').value.trim();
+                    const day = parseInt(overlay.querySelector('#classDay').value);
+                    const startTime = overlay.querySelector('#classStart').value;
+                    const endTime = overlay.querySelector('#classEnd').value;
+                    const location = overlay.querySelector('#classLocation').value.trim();
+                    const colorClass = overlay.querySelector('#classColor').value;
+
+                    if (!subject) { showNotification('Please enter a subject', true); return false; }
+                    if (!startTime || !endTime) { showNotification('Please set start and end times', true); return false; }
+                    if (startTime >= endTime) { showNotification('End time must be after start time', true); return false; }
+
+                    try {
+                        const response = await fetch(`${API_BASE}/api/schedule`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            },
+                            body: JSON.stringify({
+                                userId: user.id,
+                                subject,
+                                day,
+                                startTime,
+                                endTime,
+                                location,
+                                colorClass
+                            })
+                        });
+
+                        if (!response.ok) {
+                            const data = await response.json();
+                            showNotification(data.error || 'Failed to add class', true);
+                            return false;
+                        }
+
+                        await renderSchedule();
+                        showNotification('✅ Class added!');
+                        return true;
+                    } catch (err) {
+                        console.error('Add class error:', err);
+                        showNotification('Could not connect to server.', true);
+                        return false;
+                    }
+                }
+            );
+        });
+    }
+
+    if (resetBtn) {
+        resetBtn.addEventListener('click', async () => {
+            if (!requireLogin()) return;
+            if (!confirm('Reset schedule to default? This will replace all your current classes.')) return;
+            try {
+                const response = await fetch(`${API_BASE}/api/schedule/reset`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({ userId: user.id })
+                });
+                if (!response.ok) throw new Error('Failed');
+                await renderSchedule();
+                showNotification('🔄 Schedule reset to default');
+            } catch (err) {
+                console.error('Reset schedule error:', err);
+                showNotification('Could not connect to server.', true);
+            }
+        });
+    }
+}
+
+// ========== NAVIGATION ==========
+function initNavigation() {
+    const links = document.querySelectorAll('.nav-link');
+    const pages = document.querySelectorAll('.page');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+    links.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const pageId = link.getAttribute('data-page') + '-page';
+            links.forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+            pages.forEach(p => p.classList.remove('active'));
+            const target = document.getElementById(pageId);
+            if (target) target.classList.add('active');
+            if (window.innerWidth <= 768 && sidebar) {
+                sidebar.classList.remove('open');
+                if (overlay) overlay.classList.remove('active');
+            }
+            if (pageId === 'calendar-page') renderCalendar();
+            if (pageId === 'schedule-page') renderSchedule();
+        });
+    });
+}
+
+function initDashboardLinks() {
+    document.querySelectorAll('.card-link[data-nav]').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetPage = link.getAttribute('data-nav') + '-page';
+            const navLink = document.querySelector(`.nav-link[data-page="${link.getAttribute('data-nav')}"]`);
+            if (navLink) navLink.click();
+            else {
+                document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+                const page = document.getElementById(targetPage);
+                if (page) page.classList.add('active');
+            }
+        });
+    });
+}
+
+function initHamburger() {
+    const btn = document.getElementById('hamburgerBtn');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+    if (!btn) return;
+    const toggle = () => { sidebar.classList.toggle('open');
+        overlay.classList.toggle('active'); };
+    btn.addEventListener('click', toggle);
+    if (overlay) overlay.addEventListener('click', toggle);
+}
+
+function initDarkMode() {
+    const toggle = document.getElementById('darkModeToggle');
+    const stored = localStorage.getItem('darkMode');
+    let isDark;
+    if (stored !== null) {
+        isDark = stored === 'true';
+    } else {
+        isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    if (isDark) document.body.classList.add('dark');
+    toggle.textContent = isDark ? '☀️' : '🌙';
+    toggle.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+
+    toggle.addEventListener('click', () => {
+        document.body.classList.toggle('dark');
+        const dark = document.body.classList.contains('dark');
+        localStorage.setItem('darkMode', dark);
+        toggle.textContent = dark ? '☀️' : '🌙';
+        toggle.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+    });
+
+    if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            if (localStorage.getItem('darkMode') === null) {
+                if (e.matches) document.body.classList.add('dark');
+                else document.body.classList.remove('dark');
+                const dark = document.body.classList.contains('dark');
+                toggle.textContent = dark ? '☀️' : '🌙';
+                toggle.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+            }
+        });
+    }
+}
+
+// ========== POMODORO ==========
+function updatePomodoroDisplay() {
+    const el = document.getElementById('pomodoroDisplay');
+    if (el) {
+        const mins = Math.floor(pomodoroTime / 60);
+        const secs = pomodoroTime % 60;
+        el.textContent = `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+    }
+}
+
+function startPomodoro() {
+    if (pomodoroInterval) clearInterval(pomodoroInterval);
+    pomodoroInterval = setInterval(() => {
+        if (pomodoroTime > 0) {
+            pomodoroTime--;
+            updatePomodoroDisplay();
+        } else {
+            clearInterval(pomodoroInterval);
+            pomodoroInterval = null;
+            showNotification(pomodoroIsBreak ? '🍅 Break done! Back to study' : '✅ Session complete! +10 XP');
+            if (!pomodoroIsBreak) addXP(10);
+            pomodoroIsBreak = !pomodoroIsBreak;
+            pomodoroTime = pomodoroIsBreak ? 5 * 60 : 25 * 60;
+            updatePomodoroDisplay();
+            const ms = document.getElementById('modeSwitch');
+            if (ms) ms.textContent = pomodoroIsBreak ? 'Switch to Study (25 min)' : 'Switch to Break (5 min)';
+        }
+    }, 1000);
+}
+
+function initPomodoro() {
+    const start = document.getElementById('pomodoroStart');
+    const pause = document.getElementById('pomodoroPause');
+    const reset = document.getElementById('pomodoroReset');
+    const modeSwitch = document.getElementById('modeSwitch');
+    if (start) start.onclick = () => { if (!pomodoroInterval) startPomodoro(); };
+    if (pause) pause.onclick = () => { if (pomodoroInterval) { clearInterval(pomodoroInterval);
+            pomodoroInterval = null; } };
+    if (reset) reset.onclick = () => {
+        if (pomodoroInterval) clearInterval(pomodoroInterval);
+        pomodoroInterval = null;
+        pomodoroTime = 25 * 60;
+        pomodoroIsBreak = false;
+        updatePomodoroDisplay();
+        if (modeSwitch) modeSwitch.textContent = 'Switch to Break (5 min)';
+    };
+    if (modeSwitch) modeSwitch.onclick = () => {
+        if (pomodoroInterval) clearInterval(pomodoroInterval);
+        pomodoroInterval = null;
+        pomodoroIsBreak = !pomodoroIsBreak;
+        pomodoroTime = pomodoroIsBreak ? 5 * 60 : 25 * 60;
+        updatePomodoroDisplay();
+        modeSwitch.textContent = pomodoroIsBreak ? 'Switch to Study (25 min)' : 'Switch to Break (5 min)';
+    };
+    updatePomodoroDisplay();
+}
+
+// ========== STEADY MODE ==========
+function updateSteadyDisplay() {
+    const el = document.getElementById('steadyTimerDisplay');
+    if (el) {
+        const h = Math.floor(steadyTimeLeft / 3600);
+        const m = Math.floor((steadyTimeLeft % 3600) / 60);
+        const s = steadyTimeLeft % 60;
+        el.textContent = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+    }
+    const total = isSteadyStudy ? studySecs : restSecs;
+    const progress = total > 0 ? ((total - steadyTimeLeft) / total) * 100 : 0;
+    const fill = document.getElementById('steadyProgressFill');
+    if (fill) fill.style.width = `${Math.min(100,progress)}%`;
+}
+
+function recalcRest() {
+    const hours = parseFloat(document.getElementById('studyHours')?.value || 1);
+    const ratio = parseFloat(document.getElementById('studyRatio')?.value || 4);
+    studySecs = hours * 3600;
+    restSecs = studySecs / ratio;
+    const restMins = Math.floor(restSecs / 60);
+    const restDisplay = document.getElementById('restTimeDisplay');
+    if (restDisplay) restDisplay.innerText = `${restMins} min`;
+    if (!steadyTimer && isSteadyStudy) { steadyTimeLeft = studySecs;
+        updateSteadyDisplay(); }
+}
+
+function startSteady() {
+    if (steadyTimer) clearInterval(steadyTimer);
+    steadyTimer = setInterval(() => {
+        if (steadyTimeLeft > 0) {
+            steadyTimeLeft--;
+            updateSteadyDisplay();
+        } else {
+            clearInterval(steadyTimer);
+            steadyTimer = null;
+            if (isSteadyStudy) {
+                showNotification('✅ Study session complete! +15 XP');
+                addXP(15);
+                totalFocusSecs += studySecs;
+                totalSteadySessions++;
+                localStorage.setItem('totalFocusSecs', totalFocusSecs);
+                localStorage.setItem('totalSteadySessions', totalSteadySessions);
+                const today = new Date().toDateString();
+                if (lastDate === new Date(Date.now() - 86400000).toDateString()) streak++;
+                else if (lastDate !== today) streak = 1;
+                localStorage.setItem('steadyStreak', streak);
+                localStorage.setItem('lastSteadyDate', today);
+                updateSteadyStats();
+                isSteadyStudy = false;
+                steadyTimeLeft = restSecs;
+                updateSteadyDisplay();
+                const label = document.getElementById('steadyModeLabel');
+                if (label) label.innerHTML = '😴 Rest Time';
+                startSteady();
+            } else {
+                showNotification('☕ Break finished! Ready to study again? +5 XP');
+                addXP(5);
+                isSteadyStudy = true;
+                steadyTimeLeft = studySecs;
+                updateSteadyDisplay();
+                const label = document.getElementById('steadyModeLabel');
+                if (label) label.innerHTML = '📚 Study Time';
+                startSteady();
+            }
+        }
+    }, 1000);
+    const status = document.getElementById('sessionStatus');
+    if (status) status.innerText = isSteadyStudy ? 'Focus mode active' : 'Resting...';
+}
+
+function updateSteadyStats() {
+    const focusEl = document.getElementById('todayFocusTime');
+    const sessionsEl = document.getElementById('totalSessions');
+    const streakEl = document.getElementById('steadyStreak');
+    if (focusEl) focusEl.innerText = `${Math.floor(totalFocusSecs/3600)}h ${Math.floor((totalFocusSecs%3600)/60)}m`;
+    if (sessionsEl) sessionsEl.innerText = totalSteadySessions;
+    if (streakEl) streakEl.innerText = `${streak} days`;
+}
+
+function initSteadyMode() {
+    const studySlider = document.getElementById('studyHours');
+    const ratioSlider = document.getElementById('studyRatio');
+    if (studySlider) studySlider.addEventListener('input', () => {
+        const display = document.getElementById('studyHoursDisplay');
+        if (display) display.innerText = studySlider.value + (studySlider.value == 1 ? ' hour' : ' hours');
+        recalcRest();
+        if (!steadyTimer) steadyTimeLeft = studySecs;
+        updateSteadyDisplay();
+    });
+    if (ratioSlider) ratioSlider.addEventListener('input', () => {
+        const display = document.getElementById('ratioDisplay');
+        if (display) display.innerText = ratioSlider.value + ' : 1';
+        recalcRest();
+        if (!steadyTimer) steadyTimeLeft = studySecs;
+        updateSteadyDisplay();
+    });
+    const resetBtn = document.getElementById('resetSteadySettings');
+    if (resetBtn) resetBtn.addEventListener('click', () => {
+        if (studySlider) studySlider.value = '1';
+        if (ratioSlider) ratioSlider.value = '4';
+        const shDisplay = document.getElementById('studyHoursDisplay');
+        const rDisplay = document.getElementById('ratioDisplay');
+        if (shDisplay) shDisplay.innerText = '1 hour';
+        if (rDisplay) rDisplay.innerText = '4 : 1';
+        recalcRest();
+        if (!steadyTimer) steadyTimeLeft = studySecs;
+        updateSteadyDisplay();
+        showNotification('Settings reset to default');
+    });
+    document.getElementById('steadyStart')?.addEventListener('click', startSteady);
+    document.getElementById('steadyPause')?.addEventListener('click', () => {
+        if (steadyTimer) { clearInterval(steadyTimer);
+            steadyTimer = null;
+            document.getElementById('sessionStatus').innerText = 'Paused'; }
+    });
+    document.getElementById('steadyReset')?.addEventListener('click', () => {
+        if (steadyTimer) clearInterval(steadyTimer);
+        steadyTimer = null;
+        isSteadyStudy = true;
+        steadyTimeLeft = studySecs;
+        updateSteadyDisplay();
+        const label = document.getElementById('steadyModeLabel');
+        if (label) label.innerHTML = '📚 Study Time';
+        const status = document.getElementById('sessionStatus');
+        if (status) status.innerText = 'Ready';
+    });
+    recalcRest();
+    updateSteadyDisplay();
+    updateSteadyStats();
+}
+
+// ========== QUICK ACTIONS ==========
+function initQuickActions() {
+    document.querySelectorAll('.quick-action-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const action = btn.dataset.action;
+            if (action === 'study') {
+                document.querySelector('.nav-link[data-page="steady"]')?.click();
+            } else if (action === 'note') {
+                document.querySelector('.nav-link[data-page="notes"]')?.click();
+            } else if (action === 'reminder') {
+                document.getElementById('addReminderBtn')?.click();
+            } else if (action === 'progress') {
+                if (!requireLogin()) return;
+                showNotification('📊 Progress page coming soon!');
+            } else {
+                showNotification('✨ Feature coming soon!');
+            }
+        });
+    });
+    document.getElementById('globalAddTask')?.addEventListener('click', () => {
+        if (!requireLogin()) return;
+        showNotification('➕ Add task form would open');
+    });
+}
+
+// ========== ENTRANCE ANIMATION ==========
+function animateOnLoad() {
+    const elements = document.querySelectorAll('.stat-card, .content-card');
+    elements.forEach((el, i) => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(15px)';
+        setTimeout(() => {
+            el.style.transition = 'all 0.4s var(--ease-spring)';
+            el.style.opacity = '1';
+            el.style.transform = 'translateY(0)';
+        }, i * 50);
+    });
+}
+
 // ========== MAIN IIFE ==========
 (function() {
-    // ---- Existing global state ----
+    // ---- Global state ----
     let pomodoroInterval = null;
     let pomodoroTime = 25 * 60;
     let pomodoroIsBreak = false;
@@ -486,13 +1528,12 @@ function playBeep(audioCtx) {
             await loadNotifications();
             await loadRecentActivities();
         } else {
-            // Guest: show demo data
             document.getElementById('activityTimeline').innerHTML = DEMO_DATA.recentActivity.map(a => `
-                <div>
-                    ${a.type === 'assignment_completed' ? '✅' : a.type === 'subject_added' ? '📚' : '🧘'} ${escapeHtml(a.message)}
-                    <span class="activity-time">${timeAgo(a.created_at)}</span>
-                </div>
-            `).join('');
+                    <div>
+                        ${a.type === 'assignment_completed' ? '✅' : a.type === 'subject_added' ? '📚' : '🧘'} ${escapeHtml(a.message)}
+                        <span class="activity-time">${timeAgo(a.created_at)}</span>
+                    </div>
+                `).join('');
             document.getElementById('notificationList').innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">Login to see notifications.</p>';
         }
 
@@ -566,33 +1607,33 @@ function playBeep(audioCtx) {
         document.getElementById('addReminderBtn')?.addEventListener('click', () => {
             if (!requireLogin()) return;
             openModal('Set Reminder', `
-                <div class="form-group"><label>Title</label><input type="text" id="reminderTitle" placeholder="What to remind?" required></div>
-                <div class="form-group"><label>Date & Time</label><input type="datetime-local" id="reminderDateTime" required></div>
-                <div class="form-group"><label>Repeat</label>
-                    <select id="reminderRepeat">
-                        <option value="none">Never</option>
-                        <option value="daily">Daily</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="monthly">Monthly</option>
-                    </select>
-                </div>
-            `, async (overlay) => {
-                const title = overlay.querySelector('#reminderTitle').value.trim();
-                const dateTime = overlay.querySelector('#reminderDateTime').value;
-                const repeat = overlay.querySelector('#reminderRepeat').value;
-                if (!title || !dateTime) { showNotification('Please fill all fields', true); return false; }
-                try {
-                    const res = await fetch(`${API_BASE}/api/reminders`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                        body: JSON.stringify({ userId: user.id, title, reminderTime: dateTime, repeat })
-                    });
-                    if (!res.ok) throw new Error('Failed');
-                    await loadReminders();
-                    showNotification('✅ Reminder set!');
-                    return true;
-                } catch (err) { showNotification('Failed to set reminder', true); return false; }
-            });
+                    <div class="form-group"><label>Title</label><input type="text" id="reminderTitle" placeholder="What to remind?" required></div>
+                    <div class="form-group"><label>Date & Time</label><input type="datetime-local" id="reminderDateTime" required></div>
+                    <div class="form-group"><label>Repeat</label>
+                        <select id="reminderRepeat">
+                            <option value="none">Never</option>
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                        </select>
+                    </div>
+                `, async (overlay) => {
+                    const title = overlay.querySelector('#reminderTitle').value.trim();
+                    const dateTime = overlay.querySelector('#reminderDateTime').value;
+                    const repeat = overlay.querySelector('#reminderRepeat').value;
+                    if (!title || !dateTime) { showNotification('Please fill all fields', true); return false; }
+                    try {
+                        const res = await fetch(`${API_BASE}/api/reminders`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                            body: JSON.stringify({ userId: user.id, title, reminderTime: dateTime, repeat })
+                        });
+                        if (!res.ok) throw new Error('Failed');
+                        await loadReminders();
+                        showNotification('✅ Reminder set!');
+                        return true;
+                    } catch (err) { showNotification('Failed to set reminder', true); return false; }
+                });
         });
 
         // Notification bell
@@ -632,346 +1673,60 @@ function playBeep(audioCtx) {
                 if (ctx.state === 'suspended') ctx.resume();
             } catch (e) { /* ignore */ }
         });
+
+        // Upcoming deadlines
+        updateDeadlines();
     });
 
-    // ---------- Existing functions (keep your own logic, but we'll override some for guest) ----------
-    // We'll keep your original functions but adapt loadSubjects, renderAssignments, etc. to use demo data
-
-    async function loadSubjects() {
-        const container = document.querySelector('.subjects-grid');
+    // Upcoming deadlines
+    function updateDeadlines() {
+        const container = document.getElementById('upcomingDeadlines');
         if (!container) return;
         if (!isLoggedIn) {
-            container.innerHTML = DEMO_DATA.subjects.map(s => `
-                <div class="subject-card">
-                    <h3>${escapeHtml(s.name)}</h3>
-                    <p>${s.assignments_count} assignments · ${s.notes_count} notes</p>
-                </div>
-            `).join('');
-            refreshIcons();
-            return;
-        }
-        try {
-            const res = await fetch(`${API_BASE}/api/subjects?userId=${user.id}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!res.ok) throw new Error('Failed to fetch subjects');
-            const subjects = await res.json();
-            if (subjects.length === 0) {
-                container.innerHTML = `<div class="empty-state"><i data-lucide="book-open"></i><p>No subjects yet — add your first one!</p></div>`;
-                refreshIcons();
-                return;
-            }
-            container.innerHTML = subjects.map(s => `
-                <div class="subject-card">
-                    <h3>${escapeHtml(s.name)}</h3>
-                    <p>${s.assignments_count || 0} assignments · ${s.notes_count || 0} notes</p>
-                </div>
-            `).join('');
-            refreshIcons();
-        } catch (err) {
-            console.error('Load subjects error:', err);
-            container.innerHTML = '<p style="color:var(--danger);">Failed to load.</p>';
-        }
-    }
-
-    async function renderAssignments(filter = "all") {
-        const container = document.getElementById('assignmentsList');
-        if (!container) return;
-        if (!isLoggedIn) {
-            let filtered = DEMO_DATA.assignments;
-            if (filter === 'pending') filtered = filtered.filter(a => !a.completed);
-            else if (filter === 'completed') filtered = filtered.filter(a => a.completed);
-            container.innerHTML = filtered.map(a => `
-                <div class="assignment-item">
-                    <input type="checkbox" class="assign-check" disabled ${a.completed ? 'checked' : ''}>
-                    <div>
-                        <strong>${escapeHtml(a.title)}</strong>
-                        <div style="font-size:0.8rem">${escapeHtml(a.subject)} • Due ${a.due_date ? new Date(a.due_date).toLocaleDateString('en-US', { month:'short', day:'numeric' }) : 'No date'}</div>
-                    </div>
-                </div>
-            `).join('');
-            return;
-        }
-        try {
-            const url = `${API_BASE}/api/assignments?userId=${user.id}&filter=${filter}`;
-            const res = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!res.ok) throw new Error('Failed to fetch assignments');
-            const data = await res.json();
-            assignmentsData = data;
-            if (assignmentsData.length === 0) {
-                container.innerHTML = `<div class="empty-state"><i data-lucide="clipboard-list"></i><p>No assignments — create your first one!</p></div>`;
-                refreshIcons();
-                return;
-            }
-            container.innerHTML = assignmentsData.map(a => `
-                <div class="assignment-item">
-                    <input type="checkbox" class="assign-check" data-id="${a.id}" ${a.completed ? 'checked' : ''}>
-                    <div>
-                        <strong>${escapeHtml(a.title)}</strong>
-                        <div style="font-size:0.8rem">${escapeHtml(a.subject)} • Due ${a.due_date ? new Date(a.due_date).toLocaleDateString('en-US', { month:'short', day:'numeric' }) : 'No date'}</div>
-                    </div>
-                </div>
-            `).join('');
-            container.querySelectorAll('.assign-check').forEach(cb => {
-                cb.addEventListener('change', async (e) => {
-                    const id = parseInt(cb.dataset.id);
-                    const checked = cb.checked;
-                    await toggleAssignment(id, checked);
-                });
-            });
-            refreshIcons();
-        } catch (err) {
-            console.error('Render assignments error:', err);
-            container.innerHTML = '<p style="color:var(--danger);">Failed to load.</p>';
-        }
-    }
-
-    async function toggleAssignment(id, completed) {
-        if (!requireLogin()) return;
-        try {
-            const res = await fetch(`${API_BASE}/api/assignments/${id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({ userId: user.id, completed })
-            });
-            if (!res.ok) throw new Error('Failed');
-            if (completed) addXP(5);
-            const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
-            await renderAssignments(activeFilter);
-            updateStats();
-        } catch (err) {
-            console.error('Toggle assignment error:', err);
-            alert('Failed to update assignment.');
-        }
-    }
-
-    // ========== OVERRIDE GOALS ==========
-    async function renderGoals() {
-        const container = document.getElementById('goalsList');
-        if (!container) return;
-        if (!isLoggedIn) {
-            container.innerHTML = DEMO_DATA.goals.map(g => `
-                <div class="goal-item">
-                    <input type="checkbox" class="goal-check" disabled ${g.done ? 'checked' : ''}>
-                    <span style="flex:1;${g.done ? 'text-decoration:line-through;opacity:0.6' : ''}">${escapeHtml(g.text)}</span>
-                </div>
-            `).join('');
-            return;
-        }
-        try {
-            const res = await fetch(`${API_BASE}/api/goals?userId=${user.id}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!res.ok) throw new Error('Failed to fetch goals');
-            const data = await res.json();
-            goals = data;
-            if (goals.length === 0) {
-                container.innerHTML = `<div class="empty-state"><i data-lucide="target"></i><p>No goals yet — set your first one!</p></div>`;
-                refreshIcons();
-                return;
-            }
-            container.innerHTML = goals.map(g => `
-                <div class="goal-item">
-                    <input type="checkbox" class="goal-check" data-id="${g.id}" ${g.done ? 'checked' : ''}>
-                    <span style="flex:1;${g.done ? 'text-decoration:line-through;opacity:0.6' : ''}">${escapeHtml(g.text)}</span>
-                    <button class="del-goal" data-id="${g.id}">🗑️</button>
-                </div>
-            `).join('');
-            container.querySelectorAll('.goal-check').forEach(cb => {
-                cb.addEventListener('change', async (e) => {
-                    const id = parseInt(cb.dataset.id);
-                    const checked = cb.checked;
-                    await toggleGoal(id, checked);
-                });
-            });
-            container.querySelectorAll('.del-goal').forEach(btn => {
-                btn.addEventListener('click', async (e) => {
-                    const id = parseInt(btn.dataset.id);
-                    await deleteGoal(id);
-                });
-            });
-            refreshIcons();
-        } catch (err) {
-            console.error('Render goals error:', err);
-            container.innerHTML = '<p style="color:var(--danger);">Failed to load.</p>';
-        }
-    }
-
-    async function toggleGoal(id, done) {
-        if (!requireLogin()) return;
-        try {
-            const res = await fetch(`${API_BASE}/api/goals/${id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({ userId: user.id, done })
-            });
-            if (!res.ok) throw new Error('Failed');
-            if (done) addXP(5);
-            await renderGoals();
-        } catch (err) { alert('Failed to update goal.'); }
-    }
-
-    async function deleteGoal(id) {
-        if (!requireLogin()) return;
-        if (!confirm('Delete this goal?')) return;
-        try {
-            const res = await fetch(`${API_BASE}/api/goals/${id}`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({ userId: user.id })
-            });
-            if (!res.ok) throw new Error('Failed');
-            await renderGoals();
-        } catch (err) { alert('Failed to delete goal.'); }
-    }
-
-    // ---- OTHER MODULES (Calendar, Schedule, Steady) ----
-    // These remain as you had them; I'm omitting for brevity, but they are the same as your existing code.
-    // Since you asked for "all file completely", I'd need to paste them all, but this is getting huge.
-    // I'll assume you have these functions already and they work with the new page structure.
-
-    // Wrap up: ensure all function names match and we refresh icons after dynamic updates.
-    // I'll add a call to refreshIcons() after any dynamic content update.
-    // You also need to call loadSubjects(), renderAssignments(), renderGoals() on page load.
-
-    // ---------- Re-define init functions to use our async versions ----------
-    function initGoals() {
-        const addBtn = document.getElementById('addGoalBtn');
-        const input = document.getElementById('newGoalInput');
-        if (addBtn) addBtn.addEventListener('click', () => { if (!requireLogin()) return; addGoal(); });
-        if (input) input.addEventListener('keypress', (e) => { if (e.key === 'Enter' && isLoggedIn) addGoal(); });
-        renderGoals();
-    }
-
-    async function addGoal() {
-        if (!requireLogin()) return;
-        const input = document.getElementById('newGoalInput');
-        const text = input.value.trim();
-        if (!text) return;
-        try {
-            const res = await fetch(`${API_BASE}/api/goals`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({ userId: user.id, text })
-            });
-            if (!res.ok) throw new Error('Failed');
-            input.value = '';
-            await renderGoals();
-        } catch (err) { alert('Could not add goal.'); }
-    }
-
-    // ---------- Steady Mode and other functions should be unmodified ----------
-    // (I'll leave them as they are in your existing code.)
-
-    // We also need to override the 'initAssignments' and 'initCalendar' etc. to use our render functions.
-    // But I'll assume you already have them.
-
-    // ---------- Attach event listeners for filters ----------
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            this.classList.add('active');
-            renderAssignments(this.dataset.filter);
-        });
-    });
-
-    // ---------- Quick Actions ----------
-    function initQuickActions() {
-        document.querySelectorAll('.quick-action-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const action = btn.dataset.action;
-                if (action === 'study') {
-                    document.querySelector('.nav-link[data-page="steady"]')?.click();
-                } else if (action === 'note') {
-                    document.querySelector('.nav-link[data-page="notes"]')?.click();
-                } else if (action === 'reminder') {
-                    document.getElementById('addReminderBtn')?.click();
-                } else if (action === 'progress') {
-                    if (!requireLogin()) return;
-                    showNotification('📊 Progress page coming soon!');
-                } else {
-                    showNotification('✨ Feature coming soon!');
-                }
-            });
-        });
-        document.getElementById('globalAddTask')?.addEventListener('click', () => {
-            if (!requireLogin()) return;
-            showNotification('➕ Add task form would open');
-        });
-    }
-
-    // ---------- Override calendar and schedule to use demo data for guests ----------
-    // We'll override loadSchedule to use DEMO_DATA.schedule when not logged in.
-    // And loadCalendarEvents to use DEMO_DATA.calendarEvents.
-
-    const originalLoadSchedule = window.loadSchedule || function() {};
-    window.loadSchedule = async function() {
-        if (!isLoggedIn) {
-            scheduleClasses = DEMO_DATA.schedule.map((s, i) => ({ ...s, id: i+1 }));
-            renderSchedule(); // assuming renderSchedule exists
-            return;
-        }
-        // call original if it exists
-        if (typeof originalLoadSchedule === 'function') {
-            await originalLoadSchedule();
-        }
-    };
-
-    // Also loadCalendarEvents
-    const originalLoadCalendar = window.loadCalendarEvents || function() {};
-    window.loadCalendarEvents = async function() {
-        if (!isLoggedIn) {
-            calendarEvents = DEMO_DATA.calendarEvents.map((e, i) => ({ ...e, id: i+1 }));
-            return;
-        }
-        if (typeof originalLoadCalendar === 'function') {
-            await originalLoadCalendar();
-        }
-    };
-
-    // And upcoming deadlines
-    const originalUpdateDeadlines = window.updateDeadlines || function() {};
-    window.updateDeadlines = function() {
-        if (!isLoggedIn) {
-            const container = document.getElementById('upcomingDeadlines');
-            if (container) {
-                container.innerHTML = DEMO_DATA.upcomingDeadlines.map(d => `
+            container.innerHTML = DEMO_DATA.upcomingDeadlines.map(d => `
                     <div class="deadline-item ${d.urgency}">
                         <div class="deadline-date"><span class="date-day">${d.due.split(' ')[0]}</span><span>${d.due.split(' ')[1]}</span></div>
                         <div class="deadline-content"><strong>${escapeHtml(d.title)}</strong><div>${escapeHtml(d.subject)}</div></div>
                         <span class="deadline-badge">${d.urgency === 'urgent' ? '2 days left' : d.urgency === 'warning' ? '6 days left' : '11 days left'}</span>
                     </div>
                 `).join('');
-            }
             return;
         }
-        if (typeof originalUpdateDeadlines === 'function') {
-            originalUpdateDeadlines();
-        }
-    };
+        // For logged-in users, we can fetch from API later
+        container.innerHTML = '<p style="color:var(--text-tertiary);">No upcoming deadlines</p>';
+    }
 
-    // Finally, we call these on load
-    setTimeout(() => {
-        window.loadSchedule();
-        window.loadCalendarEvents();
-        window.updateDeadlines();
-    }, 200);
+    // Init Goals
+    function initGoals() {
+        const addBtn = document.getElementById('addGoalBtn');
+        const input = document.getElementById('newGoalInput');
+        if (addBtn) addBtn.addEventListener('click', () => { if (!requireLogin()) return;
+            addGoal(); });
+        if (input) input.addEventListener('keypress', (e) => { if (e.key === 'Enter' && isLoggedIn) addGoal(); });
+        renderGoals();
+    }
 
-    // Ensure all dynamic content gets Lucide icons refreshed
+    function initGamification() {
+        updateBadgesAndXP();
+    }
+
+    function initAssignments() {
+        renderAssignments('all');
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                renderAssignments(this.dataset.filter);
+            });
+        });
+    }
+
+    // ---- Make functions accessible globally ----
+    window.renderCalendar = renderCalendar;
+    window.renderSchedule = renderSchedule;
+    window.loadSchedule = loadSchedule;
+    window.loadCalendarEvents = loadCalendarEvents;
+    window.updateDeadlines = updateDeadlines;
+
     refreshIcons();
-
 })();
