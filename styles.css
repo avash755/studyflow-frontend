@@ -1408,13 +1408,34 @@ body {
 }
 
 /* Make main content fill the screen and push footer down */
-/* Fix footer to bottom */
-.main-content {
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
+/* Footer - centered and smaller */
+footer {
+    border-top: 1px solid var(--border);
+    padding: 1.2rem 0 0.8rem;
+    margin-top: auto;
+    width: 100%;
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
 }
 
-.main-content > footer {
-    margin-top: auto;
+footer .footer-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+footer a {
+    color: var(--text-tertiary);
+    text-decoration: none;
+}
+
+footer a:hover {
+    color: var(--primary);
+}
+
+footer .footer-links {
+    display: flex;
+    gap: 0.8rem;
 }
