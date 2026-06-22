@@ -1406,3 +1406,15 @@ body {
     max-width: 300px;
     margin: 0 auto 1rem;
 }
+
+/* Make main content fill the screen and push footer down */
+.main-content {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* Footer inside main content will stick to the bottom */
+.main-content > footer {
+    margin-top: auto;
+}
