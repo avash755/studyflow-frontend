@@ -1408,13 +1408,13 @@ body {
 }
 
 /* Make main content fill the screen and push footer down */
+/* Fix footer to bottom */
 .main-content {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
 }
 
-/* Footer inside main content will stick to the bottom */
 .main-content > footer {
     margin-top: auto;
 }
