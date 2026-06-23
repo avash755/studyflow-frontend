@@ -1002,6 +1002,144 @@ async function loadSchedule() {
     }
 }
 
+function openEditEventModal(eventData) {
+    const { id, subject, day, start_time, end_time, location, description, color_class } = eventData;
+
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const colorOptions = ['color-red', 'color-blue', 'color-green', 'color-yellow', 'color-purple', 'color-gray', 'color-default'];
+    const colorLabels = ['Red (Important)', 'Blue', 'Green', 'Yellow', 'Purple', 'Gray', 'Indigo (Default)'];
+
+    const colorSelectHtml = colorOptions.map((val, idx) => {
+        const selected = val === color_class ? 'selected' : '';
+        return `<option value="${val}" ${selected}>${colorLabels[idx]}</option>`;
+    }).join('');
+
+    const modalHtml = `
+        <div class="form-group">
+            <label for="editEventTitle">Activity Title</label>
+            <input type="text" id="editEventTitle" value="${escapeHtml(subject)}" required>
+        </div>
+        <div class="form-group">
+            <label for="editEventDay">Day</label>
+            <select id="editEventDay">
+                ${days.map((d, i) => `<option value="${i}" ${i === day ? 'selected' : ''}>${d}</option>`).join('')}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="editEventStart">Start Time</label>
+            <input type="time" id="editEventStart" value="${start_time}" required>
+        </div>
+        <div class="form-group">
+            <label for="editEventEnd">End Time</label>
+            <input type="time" id="editEventEnd" value="${end_time}" required>
+        </div>
+        <div class="form-group">
+            <label for="editEventLocation">Location (optional)</label>
+            <input type="text" id="editEventLocation" value="${escapeHtml(location || '')}" placeholder="e.g., Room 101">
+        </div>
+        <div class="form-group">
+            <label for="editEventDescription">Description (optional)</label>
+            <textarea id="editEventDescription" rows="2" placeholder="Add notes...">${escapeHtml(description || '')}</textarea>
+        </div>
+        <div class="form-group">
+            <label for="editEventColor">Color</label>
+            <select id="editEventColor">
+                ${colorSelectHtml}
+            </select>
+        </div>
+        <div style="display:flex; gap:0.75rem; margin-top:1rem; justify-content:space-between;">
+            <button class="btn btn-danger" id="deleteEventBtn">🗑️ Delete</button>
+            <div style="display:flex; gap:0.75rem;">
+                <button class="btn btn-secondary modal-cancel">Cancel</button>
+                <button class="btn btn-primary" id="saveEventBtn">💾 Save</button>
+            </div>
+        </div>
+    `;
+
+    // Open the modal
+    openModal('Edit Event', modalHtml, async (overlay) => {
+        // Save handler
+        const title = overlay.querySelector('#editEventTitle').value.trim();
+        const day = parseInt(overlay.querySelector('#editEventDay').value);
+        const startTime = overlay.querySelector('#editEventStart').value;
+        const endTime = overlay.querySelector('#editEventEnd').value;
+        const location = overlay.querySelector('#editEventLocation').value.trim();
+        const description = overlay.querySelector('#editEventDescription').value.trim();
+        const colorClass = overlay.querySelector('#editEventColor').value;
+
+        if (!title) { showNotification('Please enter a title', true); return false; }
+        if (!startTime || !endTime) { showNotification('Please set start and end times', true); return false; }
+        if (startTime >= endTime) { showNotification('End time must be after start time', true); return false; }
+
+        try {
+            const response = await fetch(`${API_BASE}/api/schedule/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    userId: user.id,
+                    subject: title,
+                    day,
+                    startTime,
+                    endTime,
+                    location,
+                    colorClass,
+                    description
+                })
+            });
+            if (!response.ok) {
+                const data = await response.json();
+                showNotification(data.error || 'Failed to update event', true);
+                return false;
+            }
+            await loadSchedule();
+            await renderSchedule();
+            showNotification('✅ Event updated!');
+            return true;
+        } catch (err) {
+            console.error('Update event error:', err);
+            showNotification('Could not connect to server.', true);
+            return false;
+        }
+    });
+
+    // Attach delete handler after modal appears (openModal renders it)
+    setTimeout(() => {
+        const deleteBtn = document.querySelector('#deleteEventBtn');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', async () => {
+                if (!confirm('Delete this event?')) return;
+                try {
+                    const response = await fetch(`${API_BASE}/api/schedule/${id}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        },
+                        body: JSON.stringify({ userId: user.id })
+                    });
+                    if (!response.ok) {
+                        const data = await response.json();
+                        showNotification(data.error || 'Failed to delete event', true);
+                        return;
+                    }
+                    // Close modal
+                    const overlay = document.querySelector('.modal-overlay');
+                    if (overlay) overlay.remove();
+                    await loadSchedule();
+                    await renderSchedule();
+                    showNotification('🗑️ Event deleted');
+                } catch (err) {
+                    console.error('Delete event error:', err);
+                    showNotification('Could not connect to server.', true);
+                }
+            });
+        }
+    }, 150);
+}
+
 async function renderSchedule() {
     const grid = document.getElementById('scheduleGrid');
     const legend = document.getElementById('scheduleLegend');
@@ -1142,7 +1280,6 @@ function initSchedule() {
                 if (startTime >= endTime) { showNotification('End time must be after start time', true); return false; }
 
                 try {
-                    // If daily, post to all 7 days
                     const daysToPost = daily ? [0,1,2,3,4,5,6] : [day];
                     let allSuccess = true;
                     for (const d of daysToPost) {
@@ -1171,9 +1308,9 @@ function initSchedule() {
                         }
                     }
                     if (allSuccess) {
-                        // Force fresh reload and re-render
-                        await loadSchedule();      // refresh data
-                        await renderSchedule();    // re-render grid
+                        // ⭐ CRITICAL: Reload data and re-render
+                        await loadSchedule();
+                        await renderSchedule();
                         showNotification('✅ Event(s) added!');
                         return true;
                     } else {
