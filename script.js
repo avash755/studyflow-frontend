@@ -978,7 +978,6 @@ function initCalendar() {
 // ===================================================================
 async function loadSchedule() {
     if (!isLoggedIn) {
-        // Demo data with a 4:00 AM event
         scheduleClasses = [
             { id: 1, subject: 'Morning Workout', day: 0, start_time: '06:00', end_time: '07:00', location: 'Gym', color_class: 'color-red', description: 'Cardio' },
             { id: 2, subject: 'Study: CS', day: 0, start_time: '09:00', end_time: '11:00', location: 'Library', color_class: 'color-blue', description: '' },
@@ -1003,6 +1002,7 @@ async function loadSchedule() {
 }
 
 function openEditEventModal(eventData) {
+    console.log('📝 Editing event:', eventData);
     const { id, subject, day, start_time, end_time, location, description, color_class } = eventData;
 
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -1057,19 +1057,64 @@ function openEditEventModal(eventData) {
     `;
 
     // Open the modal
-    openModal('Edit Event', modalHtml, async (overlay) => {
-        // Save handler
-        const title = overlay.querySelector('#editEventTitle').value.trim();
-        const day = parseInt(overlay.querySelector('#editEventDay').value);
-        const startTime = overlay.querySelector('#editEventStart').value;
-        const endTime = overlay.querySelector('#editEventEnd').value;
-        const location = overlay.querySelector('#editEventLocation').value.trim();
-        const description = overlay.querySelector('#editEventDescription').value.trim();
-        const colorClass = overlay.querySelector('#editEventColor').value;
+    const modalOverlay = document.createElement('div');
+    modalOverlay.className = 'modal-overlay';
+    modalOverlay.innerHTML = `
+        <div class="modal" style="max-width:550px;">
+            <h3>Edit Event</h3>
+            <div class="modal-body">${modalHtml}</div>
+        </div>
+    `;
+    document.body.appendChild(modalOverlay);
 
-        if (!title) { showNotification('Please enter a title', true); return false; }
-        if (!startTime || !endTime) { showNotification('Please set start and end times', true); return false; }
-        if (startTime >= endTime) { showNotification('End time must be after start time', true); return false; }
+    // Close on overlay click
+    modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay) modalOverlay.remove();
+    });
+
+    // Cancel button
+    modalOverlay.querySelector('.modal-cancel').addEventListener('click', () => modalOverlay.remove());
+
+    // Delete button
+    modalOverlay.querySelector('#deleteEventBtn').addEventListener('click', async () => {
+        if (!confirm('Delete this event?')) return;
+        try {
+            const response = await fetch(`${API_BASE}/api/schedule/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({ userId: user.id })
+            });
+            if (!response.ok) {
+                const data = await response.json();
+                showNotification(data.error || 'Failed to delete event', true);
+                return;
+            }
+            modalOverlay.remove();
+            await loadSchedule();
+            await renderSchedule();
+            showNotification('🗑️ Event deleted');
+        } catch (err) {
+            console.error('Delete error:', err);
+            showNotification('Could not connect to server.', true);
+        }
+    });
+
+    // Save button
+    modalOverlay.querySelector('#saveEventBtn').addEventListener('click', async () => {
+        const title = modalOverlay.querySelector('#editEventTitle').value.trim();
+        const day = parseInt(modalOverlay.querySelector('#editEventDay').value);
+        const startTime = modalOverlay.querySelector('#editEventStart').value;
+        const endTime = modalOverlay.querySelector('#editEventEnd').value;
+        const location = modalOverlay.querySelector('#editEventLocation').value.trim();
+        const description = modalOverlay.querySelector('#editEventDescription').value.trim();
+        const colorClass = modalOverlay.querySelector('#editEventColor').value;
+
+        if (!title) { showNotification('Please enter a title', true); return; }
+        if (!startTime || !endTime) { showNotification('Please set start and end times', true); return; }
+        if (startTime >= endTime) { showNotification('End time must be after start time', true); return; }
 
         try {
             const response = await fetch(`${API_BASE}/api/schedule/${id}`, {
@@ -1092,52 +1137,17 @@ function openEditEventModal(eventData) {
             if (!response.ok) {
                 const data = await response.json();
                 showNotification(data.error || 'Failed to update event', true);
-                return false;
+                return;
             }
+            modalOverlay.remove();
             await loadSchedule();
             await renderSchedule();
             showNotification('✅ Event updated!');
-            return true;
         } catch (err) {
-            console.error('Update event error:', err);
+            console.error('Update error:', err);
             showNotification('Could not connect to server.', true);
-            return false;
         }
     });
-
-    // Attach delete handler after modal appears (openModal renders it)
-    setTimeout(() => {
-        const deleteBtn = document.querySelector('#deleteEventBtn');
-        if (deleteBtn) {
-            deleteBtn.addEventListener('click', async () => {
-                if (!confirm('Delete this event?')) return;
-                try {
-                    const response = await fetch(`${API_BASE}/api/schedule/${id}`, {
-                        method: 'DELETE',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`
-                        },
-                        body: JSON.stringify({ userId: user.id })
-                    });
-                    if (!response.ok) {
-                        const data = await response.json();
-                        showNotification(data.error || 'Failed to delete event', true);
-                        return;
-                    }
-                    // Close modal
-                    const overlay = document.querySelector('.modal-overlay');
-                    if (overlay) overlay.remove();
-                    await loadSchedule();
-                    await renderSchedule();
-                    showNotification('🗑️ Event deleted');
-                } catch (err) {
-                    console.error('Delete event error:', err);
-                    showNotification('Could not connect to server.', true);
-                }
-            });
-        }
-    }, 150);
 }
 
 async function renderSchedule() {
@@ -1145,9 +1155,8 @@ async function renderSchedule() {
     const legend = document.getElementById('scheduleLegend');
     if (!grid) return;
 
-    await loadSchedule();  // Always fetch latest data
+    await loadSchedule();
 
-    // If no events, show a friendly message
     if (!scheduleClasses || scheduleClasses.length === 0) {
         grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--text-tertiary);">
             No events yet. Click "Add Event" to get started!
@@ -1156,10 +1165,7 @@ async function renderSchedule() {
         return;
     }
 
-    // Sunday first
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-    // Get all unique start times from events, sorted
     const startTimes = [...new Set(scheduleClasses.map(e => e.start_time))].sort();
 
     let html = '<div class="schedule-time-label">Time</div>';
@@ -1173,6 +1179,7 @@ async function renderSchedule() {
             eventsInSlot.forEach(ev => {
                 html += `
                     <div class="schedule-class-card ${ev.color_class || 'color-default'}" 
+                         data-id="${ev.id}"
                          title="${escapeHtml(ev.subject)} - ${escapeHtml(ev.location || '')}">
                         <div class="class-subject">${escapeHtml(ev.subject)}</div>
                         <div>${ev.start_time}-${ev.end_time}</div>
@@ -1185,6 +1192,20 @@ async function renderSchedule() {
     });
 
     grid.innerHTML = html;
+
+    // 🔥 Add click listeners to each event card
+    grid.querySelectorAll('.schedule-class-card').forEach(card => {
+        card.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const id = parseInt(this.dataset.id);
+            const eventData = scheduleClasses.find(e => e.id === id);
+            if (eventData) {
+                openEditEventModal(eventData);
+            } else {
+                console.warn('Event data not found for id:', id);
+            }
+        });
+    });
 
     // Legend
     if (legend) {
@@ -1211,7 +1232,6 @@ function initSchedule() {
     const addBtn = document.getElementById('addClassBtn');
     const resetBtn = document.getElementById('resetScheduleBtn');
 
-    // ---------- ADD EVENT ----------
     if (addBtn) {
         addBtn.addEventListener('click', () => {
             if (!requireLogin()) return;
@@ -1281,7 +1301,6 @@ function initSchedule() {
 
                 try {
                     const daysToPost = daily ? [0,1,2,3,4,5,6] : [day];
-                    let allSuccess = true;
                     for (const d of daysToPost) {
                         const response = await fetch(`${API_BASE}/api/schedule`, {
                             method: 'POST',
@@ -1303,19 +1322,13 @@ function initSchedule() {
                         if (!response.ok) {
                             const data = await response.json();
                             showNotification(data.error || 'Failed to add event', true);
-                            allSuccess = false;
-                            break;
+                            return false;
                         }
                     }
-                    if (allSuccess) {
-                        // ⭐ CRITICAL: Reload data and re-render
-                        await loadSchedule();
-                        await renderSchedule();
-                        showNotification('✅ Event(s) added!');
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    await loadSchedule();
+                    await renderSchedule();
+                    showNotification('✅ Event(s) added!');
+                    return true;
                 } catch (err) {
                     console.error('Add event error:', err);
                     showNotification('Could not connect to server.', true);
@@ -1325,7 +1338,6 @@ function initSchedule() {
         });
     }
 
-    // ---------- RESET SCHEDULE (custom modal) ----------
     if (resetBtn) {
         resetBtn.addEventListener('click', () => {
             if (!requireLogin()) return;
@@ -1361,7 +1373,7 @@ function initSchedule() {
                     showNotification('🔄 Schedule reset to default');
                     overlay.remove();
                 } catch (err) {
-                    console.error('Reset schedule error:', err);
+                    console.error('Reset error:', err);
                     showNotification('Could not connect to server.', true);
                     overlay.remove();
                 }
