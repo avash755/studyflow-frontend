@@ -978,19 +978,28 @@ function initCalendar() {
 // ===================================================================
 async function loadSchedule() {
     if (!isLoggedIn) {
-        // Provide full-week demo data for guests
+        // Demo data with a 4:00 AM event
         scheduleClasses = [
             { id: 1, subject: 'Morning Workout', day: 0, start_time: '06:00', end_time: '07:00', location: 'Gym', color_class: 'color-red', description: 'Cardio' },
             { id: 2, subject: 'Study: CS', day: 0, start_time: '09:00', end_time: '11:00', location: 'Library', color_class: 'color-blue', description: '' },
             { id: 3, subject: 'Team Meeting', day: 0, start_time: '14:00', end_time: '15:00', location: 'Conf Room', color_class: 'color-yellow', description: 'Weekly sync' },
-            { id: 4, subject: 'Study: Math', day: 1, start_time: '10:00', end_time: '12:00', location: 'Library', color_class: 'color-green', description: '' },
-            { id: 5, subject: 'Gym', day: 2, start_time: '07:00', end_time: '08:00', location: 'Gym', color_class: 'color-purple', description: '' },
-            // Add more if needed
+            { id: 4, subject: 'Early Bird Session', day: 1, start_time: '04:00', end_time: '05:00', location: 'Home', color_class: 'color-purple', description: 'Deep work' },
+            { id: 5, subject: 'Study: Math', day: 1, start_time: '10:00', end_time: '12:00', location: 'Library', color_class: 'color-green', description: '' },
+            { id: 6, subject: 'Gym', day: 2, start_time: '07:00', end_time: '08:00', location: 'Gym', color_class: 'color-default', description: '' },
         ];
-        
         return;
     }
-    // existing fetch logic...
+    try {
+        const response = await fetch(`${API_BASE}/api/schedule?userId=${user.id}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch schedule');
+        const data = await response.json();
+        scheduleClasses = data;
+    } catch (err) {
+        console.error('Load schedule error:', err);
+        scheduleClasses = [];
+    }
 }
 
 async function renderSchedule() {
@@ -998,10 +1007,13 @@ async function renderSchedule() {
     const legend = document.getElementById('scheduleLegend');
     if (!grid) return;
 
-    await loadSchedule();
+    await loadSchedule();  // Always fetch latest data
 
+    // If no events, show a friendly message
     if (!scheduleClasses || scheduleClasses.length === 0) {
-        grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--text-tertiary);">No events scheduled. Add one!</div>';
+        grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--text-tertiary);">
+            No events yet. Click "Add Event" to get started!
+        </div>`;
         if (legend) legend.innerHTML = '';
         return;
     }
@@ -1159,8 +1171,9 @@ function initSchedule() {
                         }
                     }
                     if (allSuccess) {
-                        // Refresh the schedule
-                        await renderSchedule();
+                        // Force fresh reload and re-render
+                        await loadSchedule();      // refresh data
+                        await renderSchedule();    // re-render grid
                         showNotification('✅ Event(s) added!');
                         return true;
                     } else {
@@ -1175,12 +1188,11 @@ function initSchedule() {
         });
     }
 
-    // ---------- RESET SCHEDULE (with custom modal) ----------
+    // ---------- RESET SCHEDULE (custom modal) ----------
     if (resetBtn) {
         resetBtn.addEventListener('click', () => {
             if (!requireLogin()) return;
 
-            // Create a custom confirmation modal
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay';
             overlay.innerHTML = `
@@ -1195,9 +1207,7 @@ function initSchedule() {
             `;
             document.body.appendChild(overlay);
 
-            overlay.querySelector('#resetCancelBtn').addEventListener('click', () => {
-                overlay.remove();
-            });
+            overlay.querySelector('#resetCancelBtn').addEventListener('click', () => overlay.remove());
             overlay.querySelector('#resetConfirmBtn').addEventListener('click', async () => {
                 try {
                     const response = await fetch(`${API_BASE}/api/schedule/reset`, {
@@ -1209,6 +1219,7 @@ function initSchedule() {
                         body: JSON.stringify({ userId: user.id })
                     });
                     if (!response.ok) throw new Error('Failed');
+                    await loadSchedule();
                     await renderSchedule();
                     showNotification('🔄 Schedule reset to default');
                     overlay.remove();
@@ -1218,7 +1229,6 @@ function initSchedule() {
                     overlay.remove();
                 }
             });
-            // Close on overlay click
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) overlay.remove();
             });
