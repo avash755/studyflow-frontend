@@ -1011,12 +1011,18 @@ body {
     border: 1px solid var(--border);
     transition: border-color 0.3s;
 }
-.schedule-grid {
+/* .schedule-grid {
     display: grid;
     grid-template-columns: 80px repeat(5, minmax(140px, 1fr));
     min-width: 700px;
     background: var(--surface);
     transition: background 0.3s;
+} */
+
+.schedule-grid {
+    display: grid;
+    grid-template-columns: 80px repeat(7, minmax(120px, 1fr));
+    min-width: 900px; /* wider to fit 7 columns */
 }
 .schedule-cell {
     border: 1px solid var(--border);
@@ -1210,7 +1216,7 @@ body {
         min-width: 150px;
     }
 }
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
     .sidebar {
         transform: translateX(-100%);
     }
@@ -1240,8 +1246,8 @@ body {
         font-size: 0.65rem;
     }
     .schedule-grid {
-        grid-template-columns: 60px repeat(5, minmax(100px, 1fr));
-        min-width: 560px;
+        grid-template-columns: 60px repeat(7, minmax(80px, 1fr));
+        min-width: 660px;
     }
     .modal {
         padding: 1.5rem;

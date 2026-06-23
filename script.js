@@ -1001,25 +1001,32 @@ async function renderSchedule() {
 
     await loadSchedule();
 
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-    const timeSlots = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
+    // 7 days: Monday to Sunday
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    // Time slots from 06:00 to 23:00 (18 slots)
+    const timeSlots = [];
+    for (let h = 6; h <= 23; h++) {
+        const hour = h.toString().padStart(2, '0');
+        timeSlots.push(`${hour}:00`);
+    }
 
     let html = '<div class="schedule-time-label">Time</div>';
     days.forEach(d => { html += `<div class="schedule-day-header">${d}</div>`; });
 
     timeSlots.forEach(time => {
         html += `<div class="schedule-time-label">${time}</div>`;
-        for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
-            const classesInSlot = scheduleClasses.filter(c => c.day === dayIdx && c.start_time === time);
+        for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+            const eventsInSlot = scheduleClasses.filter(e => e.day === dayIdx && e.start_time === time);
             html += '<div class="schedule-cell">';
-            classesInSlot.forEach(cls => {
+            eventsInSlot.forEach(ev => {
                 html += `
-                        <div class="schedule-class-card ${cls.color_class || 'color-default'}" 
-                             title="${escapeHtml(cls.subject)} - ${escapeHtml(cls.location)}">
-                            <div class="class-subject">${escapeHtml(cls.subject)}</div>
-                            <div>${cls.start_time}-${cls.end_time}</div>
-                            <div class="class-location">${escapeHtml(cls.location || '')}</div>
-                        </div>`;
+                    <div class="schedule-class-card ${ev.color_class || 'color-default'}" 
+                         title="${escapeHtml(ev.subject)} - ${escapeHtml(ev.location || '')}">
+                        <div class="class-subject">${escapeHtml(ev.subject)}</div>
+                        <div>${ev.start_time}-${ev.end_time}</div>
+                        <div class="class-location">${escapeHtml(ev.location || '')}</div>
+                        ${ev.description ? `<div style="font-size:0.6rem; opacity:0.8;">${escapeHtml(ev.description)}</div>` : ''}
+                    </div>`;
             });
             html += '</div>';
         }
@@ -1027,6 +1034,7 @@ async function renderSchedule() {
 
     grid.innerHTML = html;
 
+    // Legend
     if (legend) {
         const uniqueSubjects = [...new Set(scheduleClasses.map(c => c.subject))];
         const dotColors = {
@@ -1669,11 +1677,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Add Assignment ---
     document.getElementById('addAssignmentBtn')?.addEventListener('click', async () => {
         if (!requireLogin()) return;
-    
+
         // 1. Fetch the user's subjects to populate the dropdown
         let subjectsHtml = '<option value="">Loading subjects...</option>';
         let subjectsList = [];
-    
+
         try {
             const response = await fetch(`${API_BASE}/api/subjects?userId=${user.id}`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
@@ -1695,10 +1703,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('Failed to fetch subjects for dropdown:', err);
             subjectsHtml = '<option value="">Error loading subjects</option>';
         }
-    
+
         // Set default due date to today's date
         const today = new Date().toISOString().split('T')[0];
-    
+
         // 2. Open the modal with the dynamic dropdown
         openModal('Add New Assignment', `
             <div class="form-group">
@@ -1725,11 +1733,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             const titleInput = overlay.querySelector('#assignmentTitle');
             const subjectSelect = overlay.querySelector('#assignmentSubject');
             const dueDateInput = overlay.querySelector('#assignmentDueDate');
-        
+
             const title = titleInput.value.trim();
             const subject = subjectSelect.value;
             const dueDate = dueDateInput.value || null;
-        
+
             if (!title) {
                 showNotification('Please enter a title.', true);
                 return false;
@@ -1738,7 +1746,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showNotification('Please select a subject.', true);
                 return false;
             }
-        
+
             try {
                 const res = await fetch(`${API_BASE}/api/assignments`, {
                     method: 'POST',
@@ -1753,13 +1761,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                         dueDate
                     })
                 });
-            
+
                 if (!res.ok) {
                     const data = await res.json();
                     showNotification(data.error || 'Failed to add assignment.', true);
                     return false;
                 }
-            
+
                 const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
                 await renderAssignments(activeFilter);
                 await updateStats();
