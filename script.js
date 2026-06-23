@@ -1618,45 +1618,124 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // --- Add Subject ---
-    document.getElementById('addSubjectBtn')?.addEventListener('click', async () => {
+    document.getElementById('addSubjectBtn')?.addEventListener('click', () => {
         if (!requireLogin()) return;
-        const name = prompt('Enter subject name:');
-        if (!name || name.trim() === '') return;
-        try {
-            const res = await fetch(`${API_BASE}/api/subjects`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ userId: user.id, name: name.trim() })
-            });
-            if (!res.ok) throw new Error('Failed');
-            loadSubjects();
-            updateStats();
-            await loadNotifications();
-        } catch (err) { alert('Could not add subject.'); }
+
+        openModal('Add New Subject', `
+            <div class="form-group">
+                <label for="subjectName">Subject Name</label>
+                <input type="text" id="subjectName" placeholder="e.g., Biology" required>
+            </div>
+        `, async (overlay) => {
+            const nameInput = overlay.querySelector('#subjectName');
+            const name = nameInput.value.trim();
+
+            if (!name) {
+                showNotification('Please enter a subject name.', true);
+                return false;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/api/subjects`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({ userId: user.id, name })
+                });
+
+                if (!res.ok) {
+                    const data = await res.json();
+                    showNotification(data.error || 'Failed to add subject.', true);
+                    return false;
+                }
+
+                await loadSubjects();
+                await updateStats();
+                await loadNotifications();
+                showNotification('✅ Subject added successfully!');
+                return true;
+            } catch (err) {
+                console.error('Add subject error:', err);
+                showNotification('Could not connect to server.', true);
+                return false;
+            }
+        });
     });
 
+
     // --- Add Assignment ---
-    document.getElementById('addAssignmentBtn')?.addEventListener('click', async () => {
+    document.getElementById('addAssignmentBtn')?.addEventListener('click', () => {
         if (!requireLogin()) return;
-        const title = prompt('Assignment title:');
-        if (!title || title.trim() === '') return;
-        const subject = prompt('Subject:');
-        if (!subject || subject.trim() === '') return;
-        const dueDate = prompt('Due date (YYYY-MM-DD, blank for none):');
-        const dueDateVal = dueDate && dueDate.trim() ? dueDate.trim() : null;
-        try {
-            const res = await fetch(`${API_BASE}/api/assignments`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ userId: user.id, title: title.trim(), subject: subject.trim(), dueDate: dueDateVal })
-            });
-            if (!res.ok) throw new Error('Failed');
-            const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
-            await renderAssignments(activeFilter);
-            updateStats();
-            await loadNotifications();
-            alert('✅ Assignment added!');
-        } catch (err) { alert('Could not add assignment.'); }
+        
+        // Set default due date to today's date
+        const today = new Date().toISOString().split('T')[0];
+        
+        openModal('Add New Assignment', `
+            <div class="form-group">
+                <label for="assignmentTitle">Title</label>
+                <input type="text" id="assignmentTitle" placeholder="e.g., Binary Trees Homework" required>
+            </div>
+            <div class="form-group">
+                <label for="assignmentSubject">Subject</label>
+                <input type="text" id="assignmentSubject" placeholder="e.g., Computer Science" required>
+            </div>
+            <div class="form-group">
+                <label for="assignmentDueDate">Due Date (optional)</label>
+                <input type="date" id="assignmentDueDate" value="${today}">
+            </div>
+        `, async (overlay) => {
+            const titleInput = overlay.querySelector('#assignmentTitle');
+            const subjectInput = overlay.querySelector('#assignmentSubject');
+            const dueDateInput = overlay.querySelector('#assignmentDueDate');
+        
+            const title = titleInput.value.trim();
+            const subject = subjectInput.value.trim();
+            const dueDate = dueDateInput.value || null;
+        
+            if (!title) {
+                showNotification('Please enter a title.', true);
+                return false;
+            }
+            if (!subject) {
+                showNotification('Please enter a subject.', true);
+                return false;
+            }
+        
+            try {
+                const res = await fetch(`${API_BASE}/api/assignments`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({
+                        userId: user.id,
+                        title,
+                        subject,
+                        dueDate
+                    })
+                });
+            
+                if (!res.ok) {
+                    const data = await res.json();
+                    showNotification(data.error || 'Failed to add assignment.', true);
+                    return false;
+                }
+            
+                const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
+                await renderAssignments(activeFilter);
+                await updateStats();
+                await loadNotifications();
+                showNotification('✅ Assignment added successfully!');
+                return true;
+            } catch (err) {
+                console.error('Add assignment error:', err);
+                showNotification('Could not connect to server.', true);
+                return false;
+            }
+        });
     });
 
     // --- Add Reminder ---
