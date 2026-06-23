@@ -980,14 +980,14 @@ async function loadSchedule() {
     if (!isLoggedIn) {
         // Provide full-week demo data for guests
         scheduleClasses = [
-            { id: 1, subject: 'Morning Workout', day: 0, start_time: '06:00', end_time: '07:00', location: 'Gym', color_class: 'color-cs', description: 'Cardio' },
-            { id: 2, subject: 'Study: CS', day: 0, start_time: '09:00', end_time: '11:00', location: 'Library', color_class: 'color-math', description: '' },
-            { id: 3, subject: 'Lunch', day: 0, start_time: '12:00', end_time: '13:00', location: 'Cafeteria', color_class: 'color-default', description: '' },
-            { id: 4, subject: 'Team Meeting', day: 0, start_time: '14:00', end_time: '15:00', location: 'Conf Room', color_class: 'color-physics', description: 'Weekly sync' },
-            { id: 5, subject: 'Study: Math', day: 1, start_time: '10:00', end_time: '12:00', location: 'Library', color_class: 'color-chemistry', description: '' },
-            { id: 6, subject: 'Gym', day: 2, start_time: '07:00', end_time: '08:00', location: 'Gym', color_class: 'color-english', description: '' },
-            // Add more as needed
+            { id: 1, subject: 'Morning Workout', day: 0, start_time: '06:00', end_time: '07:00', location: 'Gym', color_class: 'color-red', description: 'Cardio' },
+            { id: 2, subject: 'Study: CS', day: 0, start_time: '09:00', end_time: '11:00', location: 'Library', color_class: 'color-blue', description: '' },
+            { id: 3, subject: 'Team Meeting', day: 0, start_time: '14:00', end_time: '15:00', location: 'Conf Room', color_class: 'color-yellow', description: 'Weekly sync' },
+            { id: 4, subject: 'Study: Math', day: 1, start_time: '10:00', end_time: '12:00', location: 'Library', color_class: 'color-green', description: '' },
+            { id: 5, subject: 'Gym', day: 2, start_time: '07:00', end_time: '08:00', location: 'Gym', color_class: 'color-purple', description: '' },
+            // Add more if needed
         ];
+        
         return;
     }
     // existing fetch logic...
@@ -1000,9 +1000,9 @@ async function renderSchedule() {
 
     await loadSchedule();
 
-    // 7 days: Monday to Sunday
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    // Time slots from 06:00 to 23:00 (18 slots)
+    // Sunday first
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    // Time slots 06:00 – 23:00 (18 slots)
     const timeSlots = [];
     for (let h = 6; h <= 23; h++) {
         const hour = h.toString().padStart(2, '0');
@@ -1033,16 +1033,16 @@ async function renderSchedule() {
 
     grid.innerHTML = html;
 
-    // Legend
+    // Legend – show unique activity names with their color dot
     if (legend) {
         const uniqueSubjects = [...new Set(scheduleClasses.map(c => c.subject))];
         const dotColors = {
-            'color-cs': '#0891b2',
-            'color-math': '#6366f1',
-            'color-physics': '#d97706',
-            'color-chemistry': '#059669',
-            'color-english': '#be185d',
-            'color-history': '#7c3aed',
+            'color-red': '#ef4444',
+            'color-blue': '#3b82f6',
+            'color-green': '#22c55e',
+            'color-yellow': '#eab308',
+            'color-purple': '#a855f7',
+            'color-gray': '#6b7280',
             'color-default': '#4f46e5'
         };
         legend.innerHTML = uniqueSubjects.map(s => {
@@ -1058,9 +1058,11 @@ function initSchedule() {
     const addBtn = document.getElementById('addClassBtn');
     const resetBtn = document.getElementById('resetScheduleBtn');
 
+    // ---------- ADD EVENT ----------
     if (addBtn) {
         addBtn.addEventListener('click', () => {
             if (!requireLogin()) return;
+
             openModal('Add Event to Planner', `
                 <div class="form-group">
                     <label for="eventTitle">Activity Title</label>
@@ -1094,16 +1096,20 @@ function initSchedule() {
                     <label for="eventDescription">Description (optional)</label>
                     <textarea id="eventDescription" rows="2" placeholder="Add notes..."></textarea>
                 </div>
+                <div class="form-group" style="display:flex; align-items:center; gap:0.5rem;">
+                    <input type="checkbox" id="eventDaily" style="width:18px; height:18px;">
+                    <label for="eventDaily" style="margin:0;">Repeat every day</label>
+                </div>
                 <div class="form-group">
                     <label for="eventColor">Color</label>
                     <select id="eventColor">
-                        <option value="color-default">Indigo</option>
-                        <option value="color-cs">Teal</option>
-                        <option value="color-math">Purple</option>
-                        <option value="color-physics">Amber</option>
-                        <option value="color-chemistry">Green</option>
-                        <option value="color-english">Pink</option>
-                        <option value="color-history">Violet</option>
+                        <option value="color-red">Red (Important)</option>
+                        <option value="color-blue">Blue</option>
+                        <option value="color-green">Green</option>
+                        <option value="color-yellow">Yellow</option>
+                        <option value="color-purple">Purple</option>
+                        <option value="color-gray">Gray</option>
+                        <option value="color-default">Indigo (Default)</option>
                     </select>
                 </div>
             `, async (overlay) => {
@@ -1114,39 +1120,49 @@ function initSchedule() {
                 const location = overlay.querySelector('#eventLocation').value.trim();
                 const description = overlay.querySelector('#eventDescription').value.trim();
                 const colorClass = overlay.querySelector('#eventColor').value;
+                const daily = overlay.querySelector('#eventDaily').checked;
 
                 if (!title) { showNotification('Please enter a title', true); return false; }
                 if (!startTime || !endTime) { showNotification('Please set start and end times', true); return false; }
                 if (startTime >= endTime) { showNotification('End time must be after start time', true); return false; }
 
                 try {
-                    const response = await fetch(`${API_BASE}/api/schedule`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`
-                        },
-                        body: JSON.stringify({
-                            userId: user.id,
-                            subject: title,
-                            day,
-                            startTime,
-                            endTime,
-                            location,
-                            colorClass,
-                            description
-                        })
-                    });
-
-                    if (!response.ok) {
-                        const data = await response.json();
-                        showNotification(data.error || 'Failed to add event', true);
+                    // If daily, post to all 7 days
+                    const daysToPost = daily ? [0,1,2,3,4,5,6] : [day];
+                    let allSuccess = true;
+                    for (const d of daysToPost) {
+                        const response = await fetch(`${API_BASE}/api/schedule`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            },
+                            body: JSON.stringify({
+                                userId: user.id,
+                                subject: title,
+                                day: d,
+                                startTime,
+                                endTime,
+                                location,
+                                colorClass,
+                                description
+                            })
+                        });
+                        if (!response.ok) {
+                            const data = await response.json();
+                            showNotification(data.error || 'Failed to add event', true);
+                            allSuccess = false;
+                            break;
+                        }
+                    }
+                    if (allSuccess) {
+                        // Refresh the schedule
+                        await renderSchedule();
+                        showNotification('✅ Event(s) added!');
+                        return true;
+                    } else {
                         return false;
                     }
-
-                    await renderSchedule();
-                    showNotification('✅ Event added!');
-                    return true;
                 } catch (err) {
                     console.error('Add event error:', err);
                     showNotification('Could not connect to server.', true);
@@ -1156,26 +1172,53 @@ function initSchedule() {
         });
     }
 
+    // ---------- RESET SCHEDULE (with custom modal) ----------
     if (resetBtn) {
-        resetBtn.addEventListener('click', async () => {
+        resetBtn.addEventListener('click', () => {
             if (!requireLogin()) return;
-            if (!confirm('Reset schedule to default? This will replace all your current events.')) return;
-            try {
-                const response = await fetch(`${API_BASE}/api/schedule/reset`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    },
-                    body: JSON.stringify({ userId: user.id })
-                });
-                if (!response.ok) throw new Error('Failed');
-                await renderSchedule();
-                showNotification('🔄 Schedule reset to default');
-            } catch (err) {
-                console.error('Reset schedule error:', err);
-                showNotification('Could not connect to server.', true);
-            }
+
+            // Create a custom confirmation modal
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            overlay.innerHTML = `
+                <div class="modal" style="max-width:450px;">
+                    <h3>Reset Weekly Planner</h3>
+                    <p style="color:var(--text-secondary); margin:1rem 0;">This will replace all your current events with the default schedule. Are you sure?</p>
+                    <div class="modal-actions" style="justify-content:center; gap:1rem;">
+                        <button class="btn btn-secondary" id="resetCancelBtn">Cancel</button>
+                        <button class="btn btn-danger" id="resetConfirmBtn">Yes, Reset</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+
+            overlay.querySelector('#resetCancelBtn').addEventListener('click', () => {
+                overlay.remove();
+            });
+            overlay.querySelector('#resetConfirmBtn').addEventListener('click', async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/api/schedule/reset`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        },
+                        body: JSON.stringify({ userId: user.id })
+                    });
+                    if (!response.ok) throw new Error('Failed');
+                    await renderSchedule();
+                    showNotification('🔄 Schedule reset to default');
+                    overlay.remove();
+                } catch (err) {
+                    console.error('Reset schedule error:', err);
+                    showNotification('Could not connect to server.', true);
+                    overlay.remove();
+                }
+            });
+            // Close on overlay click
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) overlay.remove();
+            });
         });
     }
 }

@@ -1445,3 +1445,13 @@ footer .footer-links {
     display: flex;
     gap: 0.8rem;
 }
+
+
+/* New simple color classes */
+.schedule-class-card.color-red { background: #ef4444; }
+.schedule-class-card.color-blue { background: #3b82f6; }
+.schedule-class-card.color-green { background: #22c55e; }
+.schedule-class-card.color-yellow { background: #eab308; }
+.schedule-class-card.color-purple { background: #a855f7; }
+.schedule-class-card.color-gray { background: #6b7280; }
+.schedule-class-card.color-default { background: #4f46e5; }
