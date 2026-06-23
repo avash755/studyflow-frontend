@@ -1000,19 +1000,22 @@ async function renderSchedule() {
 
     await loadSchedule();
 
+    if (!scheduleClasses || scheduleClasses.length === 0) {
+        grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--text-tertiary);">No events scheduled. Add one!</div>';
+        if (legend) legend.innerHTML = '';
+        return;
+    }
+
     // Sunday first
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    // Time slots 06:00 – 23:00 (18 slots)
-    const timeSlots = [];
-    for (let h = 6; h <= 23; h++) {
-        const hour = h.toString().padStart(2, '0');
-        timeSlots.push(`${hour}:00`);
-    }
+
+    // Get all unique start times from events, sorted
+    const startTimes = [...new Set(scheduleClasses.map(e => e.start_time))].sort();
 
     let html = '<div class="schedule-time-label">Time</div>';
     days.forEach(d => { html += `<div class="schedule-day-header">${d}</div>`; });
 
-    timeSlots.forEach(time => {
+    startTimes.forEach(time => {
         html += `<div class="schedule-time-label">${time}</div>`;
         for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
             const eventsInSlot = scheduleClasses.filter(e => e.day === dayIdx && e.start_time === time);
@@ -1033,7 +1036,7 @@ async function renderSchedule() {
 
     grid.innerHTML = html;
 
-    // Legend – show unique activity names with their color dot
+    // Legend
     if (legend) {
         const uniqueSubjects = [...new Set(scheduleClasses.map(c => c.subject))];
         const dotColors = {
