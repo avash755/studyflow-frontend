@@ -1,47 +1,5 @@
 // ===================================================================
-//  GLOBAL STATE (declared once, accessible everywhere)
-// ===================================================================
-const API_BASE = 'https://studyflow-2kcz.onrender.com';
-
-// Auth
-const token = localStorage.getItem('token');
-const isLoggedIn = !!token;
-const user = JSON.parse(localStorage.getItem('user') || '{}');
-console.log('👋 Welcome,', isLoggedIn ? user.name : 'Guest');
-
-// Pomodoro
-let pomodoroInterval = null;
-let pomodoroTime = 25 * 60;
-let pomodoroIsBreak = false;
-
-// Goals, XP, etc.
-let goals = [];
-let xp = parseInt(localStorage.getItem('xp')) || 0;
-let level = parseInt(localStorage.getItem('level')) || 1;
-let badges = JSON.parse(localStorage.getItem('badges')) || [];
-let assignmentsData = [];
-let calendarEvents = [];
-let scheduleClasses = [];
-
-// Calendar
-let calendarYear = new Date().getFullYear();
-let calendarMonth = new Date().getMonth();
-let selectedCalendarDate = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
-
-// Steady Mode
-let steadyTimer = null;
-let steadyTimeLeft = 3600;
-let isSteadyStudy = true;
-let studySecs = 3600;
-let restSecs = 900;
-let totalFocusSecs = parseInt(localStorage.getItem('totalFocusSecs')) || 0;
-let totalSteadySessions = parseInt(localStorage.getItem('totalSteadySessions')) || 0;
-let streak = parseInt(localStorage.getItem('steadyStreak')) || 0;
-let lastDate = localStorage.getItem('lastSteadyDate');
-let reminderCheckInterval = null;
-
-// ===================================================================
-//  HELPERS
+//  GLOBAL HELPERS
 // ===================================================================
 function escapeHtml(str) {
     if (!str) return '';
@@ -80,14 +38,15 @@ function refreshIcons() {
     }
 }
 
-function formatDateKey(year, month, day) {
-    return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-}
+// ===================================================================
+//  AUTH STATE
+// ===================================================================
+const token = localStorage.getItem('token');
+const isLoggedIn = !!token;
+const user = JSON.parse(localStorage.getItem('user') || '{}');
+console.log('👋 Welcome,', isLoggedIn ? user.name : 'Guest');
 
-function parseDateKey(key) {
-    const [y, m, d] = key.split('-').map(Number);
-    return { year: y, month: m - 1, day: d };
-}
+const API_BASE = 'https://studyflow-2kcz.onrender.com';
 
 // ===================================================================
 //  DEMO DATA (for guests)
@@ -137,7 +96,7 @@ const DEMO_DATA = {
 };
 
 // ===================================================================
-//  REQUIRED LOGIN MODAL
+//  REQUIRE LOGIN MODAL
 // ===================================================================
 function requireLogin() {
     if (isLoggedIn) return true;
@@ -334,7 +293,7 @@ async function updateStats() {
 }
 
 // ===================================================================
-//  LOAD STATS (XP, Level, etc.)
+//  LOAD STATS
 // ===================================================================
 async function loadStats() {
     if (!isLoggedIn) {
@@ -923,6 +882,97 @@ async function deleteCalendarEvent(id) {
     }
 }
 
+function initCalendar() {
+    const prevBtn = document.getElementById('calendarPrev');
+    const nextBtn = document.getElementById('calendarNext');
+    const todayBtn = document.getElementById('calendarTodayBtn');
+    const addBtn = document.getElementById('addEventBtn');
+
+    if (prevBtn) prevBtn.addEventListener('click', () => {
+        calendarMonth--;
+        if (calendarMonth < 0) { calendarMonth = 11;
+            calendarYear--; }
+        renderCalendar();
+    });
+    if (nextBtn) nextBtn.addEventListener('click', () => {
+        calendarMonth++;
+        if (calendarMonth > 11) { calendarMonth = 0;
+            calendarYear++; }
+        renderCalendar();
+    });
+    if (todayBtn) todayBtn.addEventListener('click', () => {
+        const now = new Date();
+        calendarYear = now.getFullYear();
+        calendarMonth = now.getMonth();
+        selectedCalendarDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        renderCalendar();
+    });
+
+    if (addBtn) {
+        addBtn.addEventListener('click', () => {
+            if (!requireLogin()) return;
+            const defaultKey = selectedCalendarDate ?
+                formatDateKey(selectedCalendarDate.getFullYear(), selectedCalendarDate.getMonth(), selectedCalendarDate.getDate()) :
+                formatDateKey(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+
+            openModal('Add Calendar Event', `
+                    <div class="form-group"><label>Event Title</label><input type="text" id="eventTitle" placeholder="E.g., Math Exam" required></div>
+                    <div class="form-group"><label>Date</label><input type="date" id="eventDate" value="${defaultKey}" required></div>
+                    <div class="form-group"><label>Time (optional)</label><input type="time" id="eventTime"></div>
+                    <div class="form-group"><label>Color</label><select id="eventColor">
+                        <option value="#4f46e5">Indigo</option>
+                        <option value="#ef4444">Red</option>
+                        <option value="#f59e0b">Amber</option>
+                        <option value="#10b981">Green</option>
+                        <option value="#3b82f6">Blue</option>
+                        <option value="#ec4899">Pink</option>
+                    </select></div>`,
+                async (overlay) => {
+                    const title = overlay.querySelector('#eventTitle').value.trim();
+                    const dateVal = overlay.querySelector('#eventDate').value;
+                    const timeVal = overlay.querySelector('#eventTime').value;
+                    const color = overlay.querySelector('#eventColor').value;
+
+                    if (!title) { showNotification('Please enter a title', true); return false; }
+                    if (!dateVal) { showNotification('Please select a date', true); return false; }
+
+                    try {
+                        const response = await fetch(`${API_BASE}/api/calendar`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            },
+                            body: JSON.stringify({
+                                userId: user.id,
+                                title: title,
+                                dateKey: dateVal,
+                                time: timeVal || null,
+                                color: color
+                            })
+                        });
+
+                        if (!response.ok) {
+                            const data = await response.json();
+                            showNotification(data.error || 'Failed to add event', true);
+                            return false;
+                        }
+
+                        await renderCalendar();
+                        showNotification('✅ Event added!');
+                        return true;
+                    } catch (err) {
+                        console.error('Add event error:', err);
+                        showNotification('Could not connect to server.', true);
+                        return false;
+                    }
+                }
+            );
+        });
+    }
+    renderCalendar();
+}
+
 // ===================================================================
 //  CLASS SCHEDULE
 // ===================================================================
@@ -992,6 +1042,113 @@ async function renderSchedule() {
             const cc = scheduleClasses.find(c => c.subject === s)?.color_class || 'color-default';
             return `<div class="schedule-legend-item"><div class="schedule-legend-dot" style="background:${dotColors[cc] || '#4f46e5'}"></div>${escapeHtml(s)}</div>`;
         }).join('');
+    }
+}
+
+function initSchedule() {
+    renderSchedule();
+
+    const addBtn = document.getElementById('addClassBtn');
+    const resetBtn = document.getElementById('resetScheduleBtn');
+
+    if (addBtn) {
+        addBtn.addEventListener('click', () => {
+            if (!requireLogin()) return;
+            openModal('Add Class', `
+                    <div class="form-group"><label>Subject</label><input type="text" id="classSubject" placeholder="E.g., Biology" required></div>
+                    <div class="form-group"><label>Day</label>
+                        <select id="classDay">
+                            <option value="0">Monday</option>
+                            <option value="1">Tuesday</option>
+                            <option value="2">Wednesday</option>
+                            <option value="3">Thursday</option>
+                            <option value="4">Friday</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Start Time</label><input type="time" id="classStart" value="09:00" required></div>
+                    <div class="form-group"><label>End Time</label><input type="time" id="classEnd" value="10:30" required></div>
+                    <div class="form-group"><label>Location</label><input type="text" id="classLocation" placeholder="E.g., Room 101"></div>
+                    <div class="form-group"><label>Color</label>
+                        <select id="classColor">
+                            <option value="color-default">Indigo</option>
+                            <option value="color-cs">Teal</option>
+                            <option value="color-math">Purple</option>
+                            <option value="color-physics">Amber</option>
+                            <option value="color-chemistry">Green</option>
+                            <option value="color-english">Pink</option>
+                            <option value="color-history">Violet</option>
+                        </select>
+                    </div>`,
+                async (overlay) => {
+                    const subject = overlay.querySelector('#classSubject').value.trim();
+                    const day = parseInt(overlay.querySelector('#classDay').value);
+                    const startTime = overlay.querySelector('#classStart').value;
+                    const endTime = overlay.querySelector('#classEnd').value;
+                    const location = overlay.querySelector('#classLocation').value.trim();
+                    const colorClass = overlay.querySelector('#classColor').value;
+
+                    if (!subject) { showNotification('Please enter a subject', true); return false; }
+                    if (!startTime || !endTime) { showNotification('Please set start and end times', true); return false; }
+                    if (startTime >= endTime) { showNotification('End time must be after start time', true); return false; }
+
+                    try {
+                        const response = await fetch(`${API_BASE}/api/schedule`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            },
+                            body: JSON.stringify({
+                                userId: user.id,
+                                subject,
+                                day,
+                                startTime,
+                                endTime,
+                                location,
+                                colorClass
+                            })
+                        });
+
+                        if (!response.ok) {
+                            const data = await response.json();
+                            showNotification(data.error || 'Failed to add class', true);
+                            return false;
+                        }
+
+                        await renderSchedule();
+                        showNotification('✅ Class added!');
+                        return true;
+                    } catch (err) {
+                        console.error('Add class error:', err);
+                        showNotification('Could not connect to server.', true);
+                        return false;
+                    }
+                }
+            );
+        });
+    }
+
+    if (resetBtn) {
+        resetBtn.addEventListener('click', async () => {
+            if (!requireLogin()) return;
+            if (!confirm('Reset schedule to default? This will replace all your current classes.')) return;
+            try {
+                const response = await fetch(`${API_BASE}/api/schedule/reset`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({ userId: user.id })
+                });
+                if (!response.ok) throw new Error('Failed');
+                await renderSchedule();
+                showNotification('🔄 Schedule reset to default');
+            } catch (err) {
+                console.error('Reset schedule error:', err);
+                showNotification('Could not connect to server.', true);
+            }
+        });
     }
 }
 
@@ -1320,7 +1477,7 @@ function animateOnLoad() {
 }
 
 // ===================================================================
-//  UPCOMING DEADLINES (Dashboard)
+//  UPCOMING DEADLINES
 // ===================================================================
 function updateDeadlines() {
     const container = document.getElementById('upcomingDeadlines');
@@ -1335,12 +1492,11 @@ function updateDeadlines() {
         `).join('');
         return;
     }
-    // For logged-in users, we can fetch from API later
     container.innerHTML = '<p style="color:var(--text-tertiary);">No upcoming deadlines</p>';
 }
 
 // ===================================================================
-//  INITIALIZE ALL
+//  INIT FUNCTIONS
 // ===================================================================
 function initGoals() {
     const addBtn = document.getElementById('addGoalBtn');
@@ -1364,6 +1520,42 @@ function initAssignments() {
             renderAssignments(this.dataset.filter);
         });
     });
+}
+
+// ===================================================================
+//  GLOBAL VARIABLES (must be declared before DOMContentLoaded)
+// ===================================================================
+let pomodoroInterval = null;
+let pomodoroTime = 25 * 60;
+let pomodoroIsBreak = false;
+let goals = [];
+let xp = parseInt(localStorage.getItem('xp')) || 0;
+let level = parseInt(localStorage.getItem('level')) || 1;
+let badges = JSON.parse(localStorage.getItem('badges')) || [];
+let assignmentsData = [];
+let calendarEvents = [];
+let scheduleClasses = [];
+let calendarYear = new Date().getFullYear();
+let calendarMonth = new Date().getMonth();
+let selectedCalendarDate = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+let steadyTimer = null;
+let steadyTimeLeft = 3600;
+let isSteadyStudy = true;
+let studySecs = 3600;
+let restSecs = 900;
+let totalFocusSecs = parseInt(localStorage.getItem('totalFocusSecs')) || 0;
+let totalSteadySessions = parseInt(localStorage.getItem('totalSteadySessions')) || 0;
+let streak = parseInt(localStorage.getItem('steadyStreak')) || 0;
+let lastDate = localStorage.getItem('lastSteadyDate');
+let reminderCheckInterval = null;
+
+function formatDateKey(year, month, day) {
+    return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function parseDateKey(key) {
+    const [y, m, d] = key.split('-').map(Number);
+    return { year: y, month: m - 1, day: d };
 }
 
 // ===================================================================
