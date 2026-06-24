@@ -1462,15 +1462,29 @@ function updateSteadyDisplay() {
 }
 
 function recalcRest() {
-    const hours = parseFloat(document.getElementById('studyHours')?.value || 1);
-    const ratio = parseFloat(document.getElementById('studyRatio')?.value || 4);
+    const hoursInput = document.getElementById('studyHours');
+    const ratioInput = document.getElementById('studyRatio');
+    const restDisplay = document.getElementById('restTimeDisplay');
+
+    if (!hoursInput || !ratioInput || !restDisplay) {
+        console.warn('Steady Mode elements not found');
+        return;
+    }
+
+    const hours = parseFloat(hoursInput.value) || 1;
+    const ratio = parseFloat(ratioInput.value) || 4;
+
     studySecs = hours * 3600;
     restSecs = studySecs / ratio;
+
     const restMins = Math.floor(restSecs / 60);
-    const restDisplay = document.getElementById('restTimeDisplay');
-    if (restDisplay) restDisplay.innerText = `${restMins} min`;
-    if (!steadyTimer && isSteadyStudy) { steadyTimeLeft = studySecs;
-        updateSteadyDisplay(); }
+    restDisplay.innerText = `${restMins} min`;
+
+    // If timer is not running, update the main timer display to study time
+    if (!steadyTimer && isSteadyStudy) {
+        steadyTimeLeft = studySecs;
+        updateSteadyDisplay();
+    }
 }
 
 function startSteady() {
@@ -1529,42 +1543,66 @@ function updateSteadyStats() {
 function initSteadyMode() {
     const studySlider = document.getElementById('studyHours');
     const ratioSlider = document.getElementById('studyRatio');
-    if (studySlider) studySlider.addEventListener('input', () => {
-        const display = document.getElementById('studyHoursDisplay');
-        if (display) display.innerText = studySlider.value + (studySlider.value == 1 ? ' hour' : ' hours');
-        recalcRest();
-        if (!steadyTimer) steadyTimeLeft = studySecs;
-        updateSteadyDisplay();
-    });
-    if (ratioSlider) ratioSlider.addEventListener('input', () => {
-        const display = document.getElementById('ratioDisplay');
-        if (display) display.innerText = ratioSlider.value + ' : 1';
-        recalcRest();
-        if (!steadyTimer) steadyTimeLeft = studySecs;
-        updateSteadyDisplay();
-    });
     const resetBtn = document.getElementById('resetSteadySettings');
-    if (resetBtn) resetBtn.addEventListener('click', () => {
-        if (studySlider) studySlider.value = '1';
-        if (ratioSlider) ratioSlider.value = '4';
-        const shDisplay = document.getElementById('studyHoursDisplay');
-        const rDisplay = document.getElementById('ratioDisplay');
-        if (shDisplay) shDisplay.innerText = '1 hour';
-        if (rDisplay) rDisplay.innerText = '4 : 1';
-        recalcRest();
-        if (!steadyTimer) steadyTimeLeft = studySecs;
-        updateSteadyDisplay();
-        showNotification('Settings reset to default');
-    });
+
+    if (studySlider) {
+        studySlider.addEventListener('input', () => {
+            const display = document.getElementById('studyHoursDisplay');
+            if (display) {
+                display.innerText = studySlider.value + (studySlider.value == 1 ? ' hour' : ' hours');
+            }
+            recalcRest();
+            if (!steadyTimer) {
+                steadyTimeLeft = studySecs;
+                updateSteadyDisplay();
+            }
+        });
+    }
+
+    if (ratioSlider) {
+        ratioSlider.addEventListener('input', () => {
+            const display = document.getElementById('ratioDisplay');
+            if (display) {
+                display.innerText = ratioSlider.value + ' : 1';
+            }
+            recalcRest();
+            if (!steadyTimer) {
+                steadyTimeLeft = studySecs;
+                updateSteadyDisplay();
+            }
+        });
+    }
+
+    if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+            if (studySlider) studySlider.value = '1';
+            if (ratioSlider) ratioSlider.value = '4';
+            const shDisplay = document.getElementById('studyHoursDisplay');
+            const rDisplay = document.getElementById('ratioDisplay');
+            if (shDisplay) shDisplay.innerText = '1 hour';
+            if (rDisplay) rDisplay.innerText = '4 : 1';
+            recalcRest();
+            if (!steadyTimer) {
+                steadyTimeLeft = studySecs;
+                updateSteadyDisplay();
+            }
+            showNotification('Settings reset to default');
+        });
+    }
+
     document.getElementById('steadyStart')?.addEventListener('click', startSteady);
     document.getElementById('steadyPause')?.addEventListener('click', () => {
-        if (steadyTimer) { clearInterval(steadyTimer);
+        if (steadyTimer) {
+            clearInterval(steadyTimer);
             steadyTimer = null;
-            document.getElementById('sessionStatus').innerText = 'Paused'; }
+            document.getElementById('sessionStatus').innerText = 'Paused';
+        }
     });
     document.getElementById('steadyReset')?.addEventListener('click', () => {
-        if (steadyTimer) clearInterval(steadyTimer);
-        steadyTimer = null;
+        if (steadyTimer) {
+            clearInterval(steadyTimer);
+            steadyTimer = null;
+        }
         isSteadyStudy = true;
         steadyTimeLeft = studySecs;
         updateSteadyDisplay();
@@ -1573,7 +1611,8 @@ function initSteadyMode() {
         const status = document.getElementById('sessionStatus');
         if (status) status.innerText = 'Ready';
     });
-    recalcRest();
+
+    recalcRest(); // initialize display
     updateSteadyDisplay();
     updateSteadyStats();
 }
