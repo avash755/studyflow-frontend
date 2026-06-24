@@ -1,3 +1,100 @@
+// Alarm state
+let alarmInterval = null;
+let alarmAudioCtx = null;
+let isAlarmActive = false;
+
+// ---------- ALARM SOUND (repeating beep) ----------
+function playAlarmBeep() {
+    try {
+        // Create a new audio context each time to avoid issues
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (ctx.state === 'suspended') ctx.resume();
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        oscillator.frequency.value = 880;
+        oscillator.type = 'square';
+        gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+        oscillator.start(ctx.currentTime);
+        oscillator.stop(ctx.currentTime + 0.4);
+        // Store context to resume on user click if needed
+        if (ctx.state === 'running') {
+            alarmAudioCtx = ctx;
+        }
+    } catch (e) {
+        console.warn('Alarm beep error:', e);
+    }
+}
+
+function startAlarmSound() {
+    if (isAlarmActive) return;
+    isAlarmActive = true;
+    // Play immediately
+    playAlarmBeep();
+    // Then repeat every 600ms
+    alarmInterval = setInterval(playAlarmBeep, 600);
+}
+
+function stopAlarmSound() {
+    isAlarmActive = false;
+    if (alarmInterval) {
+        clearInterval(alarmInterval);
+        alarmInterval = null;
+    }
+    if (alarmAudioCtx && alarmAudioCtx.state === 'running') {
+        try { alarmAudioCtx.close(); } catch (e) { /* ignore */ }
+        alarmAudioCtx = null;
+    }
+}
+
+// ---------- ALARM MODAL ----------
+function showAlarmModal(title, message) {
+    // Stop any existing alarm
+    stopAlarmSound();
+
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal" style="max-width:420px; text-align:center;">
+            <div style="font-size:4rem; margin-bottom:0.5rem;">🔔</div>
+            <h3 style="margin-bottom:0.5rem;">${escapeHtml(title)}</h3>
+            <p style="color:var(--text-secondary); margin-bottom:1.5rem;">${escapeHtml(message)}</p>
+            <button class="btn btn-primary" id="alarmStopBtn" style="font-size:1.2rem; padding:0.8rem 2.5rem;">
+                ⏹ Stop Alarm
+            </button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    // Start the alarm sound
+    startAlarmSound();
+
+    // Stop alarm when clicking the button
+    overlay.querySelector('#alarmStopBtn').addEventListener('click', () => {
+        stopAlarmSound();
+        overlay.remove();
+    });
+
+    // Also stop if user clicks outside the modal (optional)
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            stopAlarmSound();
+            overlay.remove();
+        }
+    });
+
+    // Auto-stop after 30 seconds as a safety (optional)
+    setTimeout(() => {
+        if (document.body.contains(overlay)) {
+            stopAlarmSound();
+            overlay.remove();
+        }
+    }, 30000);
+}
+
 // ===================================================================
 //  GLOBAL HELPERS
 // ===================================================================
@@ -1467,18 +1564,22 @@ function recalcRest() {
     const restDisplay = document.getElementById('restTimeDisplay');
 
     if (!hoursInput || !ratioInput || !restDisplay) {
-        console.warn('Steady Mode elements not found');
+        console.warn('Steady Mode elements not found:', { hoursInput, ratioInput, restDisplay });
         return;
     }
 
     const hours = parseFloat(hoursInput.value) || 1;
     const ratio = parseFloat(ratioInput.value) || 4;
 
+    console.log(`📊 recalcRest: hours=${hours}, ratio=${ratio}`);
+
     studySecs = hours * 3600;
     restSecs = studySecs / ratio;
 
     const restMins = Math.floor(restSecs / 60);
     restDisplay.innerText = `${restMins} min`;
+
+    console.log(`📊 restSecs=${restSecs}, restMins=${restMins}`);
 
     // If timer is not running, update the main timer display to study time
     if (!steadyTimer && isSteadyStudy) {
@@ -1497,8 +1598,12 @@ function startSteady() {
             clearInterval(steadyTimer);
             steadyTimer = null;
             if (isSteadyStudy) {
-                showNotification('✅ Study session complete! +15 XP');
+                // Show alarm modal instead of notification
+                showAlarmModal('🧘 Study Session Complete!', 'Great job! Take a break now.');
                 addXP(15);
+                // ... rest of the code (update stats, switch to rest, etc.)
+                // We'll keep the automatic switch to rest, but the alarm will ring.
+                // The timer will continue to rest mode after this.
                 totalFocusSecs += studySecs;
                 totalSteadySessions++;
                 localStorage.setItem('totalFocusSecs', totalFocusSecs);
@@ -1514,7 +1619,8 @@ function startSteady() {
                 updateSteadyDisplay();
                 const label = document.getElementById('steadyModeLabel');
                 if (label) label.innerHTML = '😴 Rest Time';
-                startSteady();
+                // Start the rest timer automatically (or we could wait)
+                startSteady(); // auto-start rest
             } else {
                 showNotification('☕ Break finished! Ready to study again? +5 XP');
                 addXP(5);
@@ -1545,38 +1651,46 @@ function initSteadyMode() {
     const ratioSlider = document.getElementById('studyRatio');
     const resetBtn = document.getElementById('resetSteadySettings');
 
-    if (studySlider) {
-        studySlider.addEventListener('input', () => {
-            const display = document.getElementById('studyHoursDisplay');
-            if (display) {
-                display.innerText = studySlider.value + (studySlider.value == 1 ? ' hour' : ' hours');
-            }
-            recalcRest();
-            if (!steadyTimer) {
-                steadyTimeLeft = studySecs;
-                updateSteadyDisplay();
-            }
-        });
+    console.log('🔄 initSteadyMode called');
+
+    if (!studySlider || !ratioSlider) {
+        console.warn('Steady Mode sliders not found');
+        return;
     }
 
-    if (ratioSlider) {
-        ratioSlider.addEventListener('input', () => {
-            const display = document.getElementById('ratioDisplay');
-            if (display) {
-                display.innerText = ratioSlider.value + ' : 1';
-            }
-            recalcRest();
-            if (!steadyTimer) {
-                steadyTimeLeft = studySecs;
-                updateSteadyDisplay();
-            }
-        });
-    }
+    // ---- Study Duration ----
+    studySlider.addEventListener('input', function() {
+        const display = document.getElementById('studyHoursDisplay');
+        if (display) {
+            display.innerText = this.value + (this.value == 1 ? ' hour' : ' hours');
+        }
+        recalcRest();
+        if (!steadyTimer) {
+            steadyTimeLeft = studySecs;
+            updateSteadyDisplay();
+        }
+        console.log('⏱️ Study duration changed to', this.value);
+    });
 
+    // ---- Study/Rest Ratio ----
+    ratioSlider.addEventListener('input', function() {
+        const display = document.getElementById('ratioDisplay');
+        if (display) {
+            display.innerText = this.value + ' : 1';
+        }
+        recalcRest();
+        if (!steadyTimer) {
+            steadyTimeLeft = studySecs;
+            updateSteadyDisplay();
+        }
+        console.log('⚖️ Ratio changed to', this.value);
+    });
+
+    // ---- Reset Button ----
     if (resetBtn) {
-        resetBtn.addEventListener('click', () => {
-            if (studySlider) studySlider.value = '1';
-            if (ratioSlider) ratioSlider.value = '4';
+        resetBtn.addEventListener('click', function() {
+            studySlider.value = '1';
+            ratioSlider.value = '4';
             const shDisplay = document.getElementById('studyHoursDisplay');
             const rDisplay = document.getElementById('ratioDisplay');
             if (shDisplay) shDisplay.innerText = '1 hour';
@@ -1587,18 +1701,27 @@ function initSteadyMode() {
                 updateSteadyDisplay();
             }
             showNotification('Settings reset to default');
+            console.log('🔄 Steady settings reset');
         });
     }
 
-    document.getElementById('steadyStart')?.addEventListener('click', startSteady);
-    document.getElementById('steadyPause')?.addEventListener('click', () => {
+    // ---- Timer Controls ----
+    document.getElementById('steadyStart')?.addEventListener('click', function() {
+        console.log('▶️ Start Steady');
+        startSteady();
+    });
+
+    document.getElementById('steadyPause')?.addEventListener('click', function() {
+        console.log('⏸️ Pause Steady');
         if (steadyTimer) {
             clearInterval(steadyTimer);
             steadyTimer = null;
             document.getElementById('sessionStatus').innerText = 'Paused';
         }
     });
-    document.getElementById('steadyReset')?.addEventListener('click', () => {
+
+    document.getElementById('steadyReset')?.addEventListener('click', function() {
+        console.log('🔄 Reset Steady');
         if (steadyTimer) {
             clearInterval(steadyTimer);
             steadyTimer = null;
@@ -1612,9 +1735,12 @@ function initSteadyMode() {
         if (status) status.innerText = 'Ready';
     });
 
-    recalcRest(); // initialize display
+    // ---- Initialize ----
+    recalcRest();
     updateSteadyDisplay();
     updateSteadyStats();
+
+    console.log('✅ Steady Mode initialized with studySecs=', studySecs, 'restSecs=', restSecs);
 }
 
 // ===================================================================
