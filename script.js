@@ -389,12 +389,18 @@ async function updateStats() {
     }
 }
 
+
+
 // ===================================================================
 //  LOAD STATS
 // ===================================================================
 async function loadStats() {
     if (!isLoggedIn) {
-        window._statsData = null;
+        // Guest: show zero stats
+        totalFocusSecs = 0;
+        totalSteadySessions = 0;
+        streak = 0;
+        updateSteadyStats();
         return;
     }
     try {
@@ -403,10 +409,45 @@ async function loadStats() {
         });
         if (!response.ok) throw new Error('Failed to fetch stats');
         const data = await response.json();
-        window._statsData = data;
+
+        // Update global variables
+        xp = data.xp || 0;
+        level = data.level || 1;
+        badges = JSON.parse(data.badges || '[]');
+        totalFocusSecs = data.total_focus_seconds || 0;
+        totalSteadySessions = data.total_sessions || 0;
+        streak = data.streak || 0;
+        lastDate = data.last_active_date || null;
+
+        // Update UI
+        updateBadgesAndXP();
+        updateSteadyStats();
     } catch (err) {
         console.error('Load stats error:', err);
-        window._statsData = null;
+    }
+}
+
+// ===================================================================
+//  INIT STATS (creates stats row in database for new users)
+// ===================================================================
+async function initStats(userId) {
+    try {
+        const response = await fetch(`${API_BASE}/api/stats/init`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ userId })
+        });
+        if (!response.ok) {
+            console.warn('Stats init response not OK:', response.status);
+            return;
+        }
+        await loadStats(); // Refresh stats after initialization
+        console.log('✅ Stats initialized for user:', userId);
+    } catch (err) {
+        console.error('❌ Init stats error:', err);
     }
 }
 
@@ -1603,6 +1644,7 @@ function recalcRest() {
 
 function startSteady() {
     if (steadyTimer) clearInterval(steadyTimer);
+
     steadyTimer = setInterval(() => {
         if (steadyTimeLeft > 0) {
             steadyTimeLeft--;
@@ -1610,43 +1652,100 @@ function startSteady() {
         } else {
             clearInterval(steadyTimer);
             steadyTimer = null;
+
             if (isSteadyStudy) {
-                // Show alarm modal instead of notification
-                showAlarmModal('🧘 Study Session Complete!', 'Great job! Take a break now.');
+                // ---- Study session complete ----
+                showNotification('✅ Study session complete! +15 XP');
+
+                // 1. Add XP (async, but we don't need to wait)
                 addXP(15);
-                // ... rest of the code (update stats, switch to rest, etc.)
-                // We'll keep the automatic switch to rest, but the alarm will ring.
-                // The timer will continue to rest mode after this.
-                totalFocusSecs += studySecs;
-                totalSteadySessions++;
-                localStorage.setItem('totalFocusSecs', totalFocusSecs);
-                localStorage.setItem('totalSteadySessions', totalSteadySessions);
-                const today = new Date().toDateString();
-                if (lastDate === new Date(Date.now() - 86400000).toDateString()) streak++;
-                else if (lastDate !== today) streak = 1;
-                localStorage.setItem('steadyStreak', streak);
-                localStorage.setItem('lastSteadyDate', today);
-                updateSteadyStats();
+
+                // 2. Update stats in the database
+                (async () => {
+                    if (!isLoggedIn) {
+                        // Fallback to localStorage if not logged in (shouldn't happen)
+                        totalFocusSecs += studySecs;
+                        totalSteadySessions++;
+                        localStorage.setItem('totalFocusSecs', totalFocusSecs);
+                        localStorage.setItem('totalSteadySessions', totalSteadySessions);
+                        const today = new Date().toDateString();
+                        if (lastDate === new Date(Date.now() - 86400000).toDateString()) streak++;
+                        else if (lastDate !== today) streak = 1;
+                        localStorage.setItem('steadyStreak', streak);
+                        localStorage.setItem('lastSteadyDate', today);
+                        updateSteadyStats();
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch(`${API_BASE}/api/stats`, {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            },
+                            body: JSON.stringify({
+                                userId: user.id,
+                                sessionTime: studySecs,
+                                sessionIncrement: true,
+                                streakUpdate: true
+                            })
+                        });
+
+                        if (!response.ok) throw new Error('Failed to update stats');
+
+                        const data = await response.json();
+                        // Update global variables with the returned data
+                        totalFocusSecs = data.total_focus_seconds;
+                        totalSteadySessions = data.total_sessions;
+                        streak = data.streak;
+                        lastDate = data.last_active_date;
+
+                        // Save them in localStorage as a fallback (optional)
+                        localStorage.setItem('totalFocusSecs', totalFocusSecs);
+                        localStorage.setItem('totalSteadySessions', totalSteadySessions);
+                        localStorage.setItem('steadyStreak', streak);
+                        localStorage.setItem('lastSteadyDate', lastDate);
+
+                        updateSteadyStats();
+                    } catch (err) {
+                        console.error('Failed to update steady stats:', err);
+                        // Fallback to localStorage
+                        totalFocusSecs += studySecs;
+                        totalSteadySessions++;
+                        localStorage.setItem('totalFocusSecs', totalFocusSecs);
+                        localStorage.setItem('totalSteadySessions', totalSteadySessions);
+                        const today = new Date().toDateString();
+                        if (lastDate === new Date(Date.now() - 86400000).toDateString()) streak++;
+                        else if (lastDate !== today) streak = 1;
+                        localStorage.setItem('steadyStreak', streak);
+                        localStorage.setItem('lastSteadyDate', today);
+                        updateSteadyStats();
+                    }
+                })();
+
+                // ---- Switch to rest ----
                 isSteadyStudy = false;
                 steadyTimeLeft = restSecs;
                 updateSteadyDisplay();
                 const label = document.getElementById('steadyModeLabel');
                 if (label) label.innerHTML = '😴 Rest Time';
-                // Start the rest timer automatically (or we could wait)
-                startSteady(); // auto-start rest
-            } 
-            else {
-                showAlarmModal('☕ Break Finished!', 'Ready to study again?');
+                startSteady();
+
+            } else {
+                // ---- Rest finished ----
+                showNotification('☕ Break finished! Ready to study again? +5 XP');
                 addXP(5);
                 isSteadyStudy = true;
                 steadyTimeLeft = studySecs;
                 updateSteadyDisplay();
                 const label = document.getElementById('steadyModeLabel');
                 if (label) label.innerHTML = '📚 Study Time';
-                startSteady(); // auto-start study
+                startSteady();
             }
         }
     }, 1000);
+
     const status = document.getElementById('sessionStatus');
     if (status) status.innerText = isSteadyStudy ? 'Focus mode active' : 'Resting...';
 }
@@ -1655,7 +1754,12 @@ function updateSteadyStats() {
     const focusEl = document.getElementById('todayFocusTime');
     const sessionsEl = document.getElementById('totalSessions');
     const streakEl = document.getElementById('steadyStreak');
-    if (focusEl) focusEl.innerText = `${Math.floor(totalFocusSecs/3600)}h ${Math.floor((totalFocusSecs%3600)/60)}m`;
+
+    if (focusEl) {
+        const hours = Math.floor(totalFocusSecs / 3600);
+        const mins = Math.floor((totalFocusSecs % 3600) / 60);
+        focusEl.innerText = `${hours}h ${mins}m`;
+    }
     if (sessionsEl) sessionsEl.innerText = totalSteadySessions;
     if (streakEl) streakEl.innerText = `${streak} days`;
 }

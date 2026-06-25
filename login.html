@@ -160,6 +160,23 @@
             }
         }
 
+        // ========== initStats (calls the backend to create stats row) ==========
+        async function initStats(userId, token) {
+            try {
+                await fetch(`${API_BASE}/api/stats/init`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ userId })
+                });
+                console.log('✅ Stats initialized for user:', userId);
+            } catch (err) {
+                console.warn('Stats init failed (non-critical):', err);
+            }
+        }
+
         // ========== LOGIN ==========
         loginBtn.addEventListener('click', async () => {
             loginAlert.classList.remove('show');
@@ -191,6 +208,9 @@
                 // Save token and user
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('user', JSON.stringify(data.user));
+
+                // Initialize stats for this user
+                await initStats(data.user.id, data.token);
 
                 // Redirect to dashboard
                 window.location.href = 'app.html';
@@ -238,17 +258,8 @@
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('user', JSON.stringify(data.user));
 
-                // Initialize stats in DB
-                try {
-                    await fetch(`${API_BASE}/api/stats/init`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${data.token}`
-                        },
-                        body: JSON.stringify({ userId: data.user.id })
-                    });
-                } catch (e) { /* ignore */ }
+                // Initialize stats for this user
+                await initStats(data.user.id, data.token);
 
                 // Redirect to dashboard
                 window.location.href = 'app.html';

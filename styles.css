@@ -1457,6 +1457,7 @@ footer .footer-links {
 .schedule-class-card.color-default { background: #4f46e5; }
 
 .hamburger {
+    opacity: 0.90;
     background: rgba(255, 255, 255, 0.15) !important;
     backdrop-filter: blur(8px) !important;
     -webkit-backdrop-filter: blur(8px) !important;
@@ -1467,7 +1468,8 @@ footer .footer-links {
     transition: all 0.3s ease;
 }
 .hamburger:hover {
-    background: rgba(255, 255, 255, 0.25) !important;
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.95) !important;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12) !important;
 }
 .hamburger svg {
