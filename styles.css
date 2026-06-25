@@ -1457,11 +1457,31 @@ footer .footer-links {
 .schedule-class-card.color-default { background: #4f46e5; }
 
 .hamburger {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 8px;
+    background: rgba(255, 255, 255, 0.15) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+    padding: 10px;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+.hamburger:hover {
+    background: rgba(255, 255, 255, 0.25) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12) !important;
 }
 .hamburger svg {
     stroke: var(--text-primary);
+    stroke-width: 2;
+    width: 24px;
+    height: 24px;
+}
+
+/* Dark mode support */
+body.dark .hamburger {
+    background: rgba(0, 0, 0, 0.25) !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+body.dark .hamburger:hover {
+    background: rgba(0, 0, 0, 0.35) !important;
 }
