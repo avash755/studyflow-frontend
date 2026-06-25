@@ -1503,13 +1503,26 @@ function startPomodoro() {
         } else {
             clearInterval(pomodoroInterval);
             pomodoroInterval = null;
-            showNotification(pomodoroIsBreak ? '🍅 Break done! Back to study' : '✅ Session complete! +10 XP');
-            if (!pomodoroIsBreak) addXP(10);
+
+            // 🚨 Show alarm modal
+            const isBreak = pomodoroIsBreak;
+            showAlarmModal(
+                isBreak ? '🍅 Break Finished!' : '✅ Session Complete!',
+                isBreak ? 'Time to get back to study!' : `You earned +10 XP!`
+            );
+
+            if (!pomodoroIsBreak) {
+                addXP(10);
+            }
+
             pomodoroIsBreak = !pomodoroIsBreak;
             pomodoroTime = pomodoroIsBreak ? 5 * 60 : 25 * 60;
             updatePomodoroDisplay();
             const ms = document.getElementById('modeSwitch');
             if (ms) ms.textContent = pomodoroIsBreak ? 'Switch to Study (25 min)' : 'Switch to Break (5 min)';
+
+            // Auto-start next session
+            startPomodoro();
         }
     }, 1000);
 }
@@ -1621,15 +1634,16 @@ function startSteady() {
                 if (label) label.innerHTML = '😴 Rest Time';
                 // Start the rest timer automatically (or we could wait)
                 startSteady(); // auto-start rest
-            } else {
-                showNotification('☕ Break finished! Ready to study again? +5 XP');
+            } 
+            else {
+                showAlarmModal('☕ Break Finished!', 'Ready to study again?');
                 addXP(5);
                 isSteadyStudy = true;
                 steadyTimeLeft = studySecs;
                 updateSteadyDisplay();
                 const label = document.getElementById('steadyModeLabel');
                 if (label) label.innerHTML = '📚 Study Time';
-                startSteady();
+                startSteady(); // auto-start study
             }
         }
     }, 1000);
