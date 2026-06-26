@@ -1522,3 +1522,37 @@ body.dark .hamburger:hover {
 .task-type-btn.btn-secondary:hover {
     background: var(--hover-surface);
 }
+
+/* Notes page */
+.notes-container {
+    gap: 1.5rem;
+}
+.notes-list {
+    flex: 0 0 300px;
+}
+@media (max-width: 768px) {
+    .notes-container {
+        flex-direction: column;
+        height: auto;
+        min-height: 500px;
+    }
+    .notes-list {
+        flex: none;
+        max-height: 250px;
+        overflow-y: auto;
+    }
+    .notes-editor {
+        min-height: 300px;
+    }
+}
+
+/* Note list item active state */
+.note-list-item.active {
+    background: var(--primary-glow);
+    border-left-color: var(--primary);
+}
+
+/* Editor */
+#noteContent {
+    line-height: 1.6;
+}

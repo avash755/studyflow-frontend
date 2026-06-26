@@ -1,3 +1,7 @@
+let notes = [];
+let currentNoteId = null;
+let noteSaveTimeout = null;
+
 // Alarm state
 let alarmInterval = null;
 let alarmAudioCtx = null;
@@ -6,7 +10,6 @@ let isAlarmActive = false;
 // ---------- ALARM SOUND (repeating beep) ----------
 function playAlarmBeep() {
     try {
-        // Create a new audio context each time to avoid issues
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         if (ctx.state === 'suspended') ctx.resume();
         const oscillator = ctx.createOscillator();
@@ -19,7 +22,6 @@ function playAlarmBeep() {
         gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
         oscillator.start(ctx.currentTime);
         oscillator.stop(ctx.currentTime + 0.4);
-        // Store context to resume on user click if needed
         if (ctx.state === 'running') {
             alarmAudioCtx = ctx;
         }
@@ -31,9 +33,7 @@ function playAlarmBeep() {
 function startAlarmSound() {
     if (isAlarmActive) return;
     isAlarmActive = true;
-    // Play immediately
     playAlarmBeep();
-    // Then repeat every 600ms
     alarmInterval = setInterval(playAlarmBeep, 600);
 }
 
@@ -49,12 +49,8 @@ function stopAlarmSound() {
     }
 }
 
-// ---------- ALARM MODAL ----------
 function showAlarmModal(title, message) {
-    // Stop any existing alarm
     stopAlarmSound();
-
-    // Create modal overlay
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
@@ -68,25 +64,17 @@ function showAlarmModal(title, message) {
         </div>
     `;
     document.body.appendChild(overlay);
-
-    // Start the alarm sound
     startAlarmSound();
-
-    // Stop alarm when clicking the button
     overlay.querySelector('#alarmStopBtn').addEventListener('click', () => {
         stopAlarmSound();
         overlay.remove();
     });
-
-    // Also stop if user clicks outside the modal (optional)
     overlay.addEventListener('click', (e) => {
         if (e.target === overlay) {
             stopAlarmSound();
             overlay.remove();
         }
     });
-
-    // Auto-stop after 30 seconds as a safety (optional)
     setTimeout(() => {
         if (document.body.contains(overlay)) {
             stopAlarmSound();
@@ -146,7 +134,7 @@ console.log('👋 Welcome,', isLoggedIn ? user.name : 'Guest');
 const API_BASE = 'https://studyflow-2kcz.onrender.com';
 
 // ===================================================================
-//  DEMO DATA (for guests)
+//  DEMO DATA
 // ===================================================================
 const DEMO_DATA = {
     subjects: [
@@ -193,7 +181,7 @@ const DEMO_DATA = {
 };
 
 // ===================================================================
-//  REQUIRE LOGIN MODAL
+//  REQUIRE LOGIN
 // ===================================================================
 function requireLogin() {
     if (isLoggedIn) return true;
@@ -389,14 +377,11 @@ async function updateStats() {
     }
 }
 
-
-
 // ===================================================================
 //  LOAD STATS
 // ===================================================================
 async function loadStats() {
     if (!isLoggedIn) {
-        // Guest: show zero stats
         totalFocusSecs = 0;
         totalSteadySessions = 0;
         streak = 0;
@@ -409,8 +394,6 @@ async function loadStats() {
         });
         if (!response.ok) throw new Error('Failed to fetch stats');
         const data = await response.json();
-
-        // Update global variables
         xp = data.xp || 0;
         level = data.level || 1;
         badges = JSON.parse(data.badges || '[]');
@@ -418,8 +401,6 @@ async function loadStats() {
         totalSteadySessions = data.total_sessions || 0;
         streak = data.streak || 0;
         lastDate = data.last_active_date || null;
-
-        // Update UI
         updateBadgesAndXP();
         updateSteadyStats();
     } catch (err) {
@@ -427,9 +408,6 @@ async function loadStats() {
     }
 }
 
-// ===================================================================
-//  INIT STATS (creates stats row in database for new users)
-// ===================================================================
 async function initStats(userId) {
     try {
         const response = await fetch(`${API_BASE}/api/stats/init`, {
@@ -444,7 +422,7 @@ async function initStats(userId) {
             console.warn('Stats init response not OK:', response.status);
             return;
         }
-        await loadStats(); // Refresh stats after initialization
+        await loadStats();
         console.log('✅ Stats initialized for user:', userId);
     } catch (err) {
         console.error('❌ Init stats error:', err);
@@ -1194,7 +1172,6 @@ function openEditEventModal(eventData) {
         </div>
     `;
 
-    // Open the modal
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'modal-overlay';
     modalOverlay.innerHTML = `
@@ -1205,15 +1182,12 @@ function openEditEventModal(eventData) {
     `;
     document.body.appendChild(modalOverlay);
 
-    // Close on overlay click
     modalOverlay.addEventListener('click', (e) => {
         if (e.target === modalOverlay) modalOverlay.remove();
     });
 
-    // Cancel button
     modalOverlay.querySelector('.modal-cancel').addEventListener('click', () => modalOverlay.remove());
 
-    // Delete button
     modalOverlay.querySelector('#deleteEventBtn').addEventListener('click', async () => {
         if (!confirm('Delete this event?')) return;
         try {
@@ -1240,7 +1214,6 @@ function openEditEventModal(eventData) {
         }
     });
 
-    // Save button
     modalOverlay.querySelector('#saveEventBtn').addEventListener('click', async () => {
         const title = modalOverlay.querySelector('#editEventTitle').value.trim();
         const day = parseInt(modalOverlay.querySelector('#editEventDay').value);
@@ -1331,7 +1304,6 @@ async function renderSchedule() {
 
     grid.innerHTML = html;
 
-    // 🔥 Add click listeners to each event card
     grid.querySelectorAll('.schedule-class-card').forEach(card => {
         card.addEventListener('click', function(e) {
             e.stopPropagation();
@@ -1345,7 +1317,6 @@ async function renderSchedule() {
         });
     });
 
-    // Legend
     if (legend) {
         const uniqueSubjects = [...new Set(scheduleClasses.map(c => c.subject))];
         const dotColors = {
@@ -1545,7 +1516,6 @@ function startPomodoro() {
             clearInterval(pomodoroInterval);
             pomodoroInterval = null;
 
-            // 🚨 Show alarm modal
             const isBreak = pomodoroIsBreak;
             showAlarmModal(
                 isBreak ? '🍅 Break Finished!' : '✅ Session Complete!',
@@ -1562,7 +1532,6 @@ function startPomodoro() {
             const ms = document.getElementById('modeSwitch');
             if (ms) ms.textContent = pomodoroIsBreak ? 'Switch to Study (25 min)' : 'Switch to Break (5 min)';
 
-            // Auto-start next session
             startPomodoro();
         }
     }, 1000);
@@ -1635,7 +1604,6 @@ function recalcRest() {
 
     console.log(`📊 restSecs=${restSecs}, restMins=${restMins}`);
 
-    // If timer is not running, update the main timer display to study time
     if (!steadyTimer && isSteadyStudy) {
         steadyTimeLeft = studySecs;
         updateSteadyDisplay();
@@ -1654,16 +1622,11 @@ function startSteady() {
             steadyTimer = null;
 
             if (isSteadyStudy) {
-                // ---- Study session complete ----
                 showNotification('✅ Study session complete! +15 XP');
-
-                // 1. Add XP (async, but we don't need to wait)
                 addXP(15);
 
-                // 2. Update stats in the database
                 (async () => {
                     if (!isLoggedIn) {
-                        // Fallback to localStorage if not logged in (shouldn't happen)
                         totalFocusSecs += studySecs;
                         totalSteadySessions++;
                         localStorage.setItem('totalFocusSecs', totalFocusSecs);
@@ -1695,13 +1658,11 @@ function startSteady() {
                         if (!response.ok) throw new Error('Failed to update stats');
 
                         const data = await response.json();
-                        // Update global variables with the returned data
                         totalFocusSecs = data.total_focus_seconds;
                         totalSteadySessions = data.total_sessions;
                         streak = data.streak;
                         lastDate = data.last_active_date;
 
-                        // Save them in localStorage as a fallback (optional)
                         localStorage.setItem('totalFocusSecs', totalFocusSecs);
                         localStorage.setItem('totalSteadySessions', totalSteadySessions);
                         localStorage.setItem('steadyStreak', streak);
@@ -1710,7 +1671,6 @@ function startSteady() {
                         updateSteadyStats();
                     } catch (err) {
                         console.error('Failed to update steady stats:', err);
-                        // Fallback to localStorage
                         totalFocusSecs += studySecs;
                         totalSteadySessions++;
                         localStorage.setItem('totalFocusSecs', totalFocusSecs);
@@ -1724,7 +1684,6 @@ function startSteady() {
                     }
                 })();
 
-                // ---- Switch to rest ----
                 isSteadyStudy = false;
                 steadyTimeLeft = restSecs;
                 updateSteadyDisplay();
@@ -1733,7 +1692,6 @@ function startSteady() {
                 startSteady();
 
             } else {
-                // ---- Rest finished ----
                 showNotification('☕ Break finished! Ready to study again? +5 XP');
                 addXP(5);
                 isSteadyStudy = true;
@@ -1776,7 +1734,6 @@ function initSteadyMode() {
         return;
     }
 
-    // ---- Study Duration ----
     studySlider.addEventListener('input', function() {
         const display = document.getElementById('studyHoursDisplay');
         if (display) {
@@ -1790,7 +1747,6 @@ function initSteadyMode() {
         console.log('⏱️ Study duration changed to', this.value);
     });
 
-    // ---- Study/Rest Ratio ----
     ratioSlider.addEventListener('input', function() {
         const display = document.getElementById('ratioDisplay');
         if (display) {
@@ -1804,7 +1760,6 @@ function initSteadyMode() {
         console.log('⚖️ Ratio changed to', this.value);
     });
 
-    // ---- Reset Button ----
     if (resetBtn) {
         resetBtn.addEventListener('click', function() {
             studySlider.value = '1';
@@ -1823,7 +1778,6 @@ function initSteadyMode() {
         });
     }
 
-    // ---- Timer Controls ----
     document.getElementById('steadyStart')?.addEventListener('click', function() {
         console.log('▶️ Start Steady');
         startSteady();
@@ -1853,7 +1807,6 @@ function initSteadyMode() {
         if (status) status.innerText = 'Ready';
     });
 
-    // ---- Initialize ----
     recalcRest();
     updateSteadyDisplay();
     updateSteadyStats();
@@ -1950,7 +1903,7 @@ function initDarkMode() {
 }
 
 // ===================================================================
-//  QUICK ACTIONS
+//  QUICK ACTIONS & GLOBAL ADD TASK
 // ===================================================================
 function initQuickActions() {
     document.querySelectorAll('.quick-action-btn').forEach(btn => {
@@ -1970,30 +1923,23 @@ function initQuickActions() {
             }
         });
     });
-    // ========== ADD TASK (Global Quick Action) ==========
+
     document.getElementById('globalAddTask')?.addEventListener('click', () => {
         if (!requireLogin()) return;
-    
-        // Build the modal content dynamically
+
         const modalContent = `
             <div style="display:flex; gap:0.5rem; margin-bottom:1.2rem; flex-wrap:wrap;" id="taskTypeSelector">
                 <button class="btn btn-primary task-type-btn" data-type="assignment" style="flex:1; justify-content:center;">📋 Assignment</button>
                 <button class="btn btn-secondary task-type-btn" data-type="goal" style="flex:1; justify-content:center;">🎯 Goal</button>
                 <button class="btn btn-secondary task-type-btn" data-type="reminder" style="flex:1; justify-content:center;">⏰ Reminder</button>
             </div>
-    
-            <!-- Dynamic fields container -->
-            <div id="taskDynamicFields">
-                <!-- Will be populated by JavaScript -->
-            </div>
-    
+            <div id="taskDynamicFields"></div>
             <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1rem;">
                 <button class="btn btn-secondary modal-cancel">Cancel</button>
                 <button class="btn btn-primary" id="submitTaskBtn">💾 Save Task</button>
             </div>
         `;
-    
-        // Use openModal with a custom onSave (we'll handle save manually)
+
         const container = document.getElementById('modalContainer');
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
@@ -2006,22 +1952,18 @@ function initQuickActions() {
             </div>
         `;
         container.appendChild(overlay);
-    
-        // Close handlers
+
         const closeModal = () => overlay.remove();
         overlay.querySelector('.modal-cancel').addEventListener('click', closeModal);
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay) closeModal();
         });
-    
-        // ---- Dynamic Field Logic ----
+
         const typeBtns = overlay.querySelectorAll('.task-type-btn');
         const dynamicContainer = overlay.querySelector('#taskDynamicFields');
         let currentType = 'assignment';
-    
-        // Function to render fields based on type
+
         function renderFields(type) {
-            // Update button styles
             typeBtns.forEach(btn => {
                 btn.classList.remove('btn-primary');
                 btn.classList.add('btn-secondary');
@@ -2030,9 +1972,8 @@ function initQuickActions() {
                     btn.classList.add('btn-primary');
                 }
             });
-        
             currentType = type;
-        
+
             let fieldsHtml = '';
             if (type === 'assignment') {
                 fieldsHtml = `
@@ -2084,42 +2025,34 @@ function initQuickActions() {
                 `;
             }
             dynamicContainer.innerHTML = fieldsHtml;
-        
-            // Re-focus the title input after render
             const titleInput = dynamicContainer.querySelector('#taskTitle');
             if (titleInput) setTimeout(() => titleInput.focus(), 100);
-        
-            // Refresh Lucide icons (if any)
             if (typeof lucide !== 'undefined') lucide.createIcons();
         }
-    
-        // ---- Event Listeners for type buttons ----
+
         typeBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 renderFields(btn.dataset.type);
             });
         });
-    
-        // Initial render (assignment)
+
         renderFields('assignment');
-    
-        // ---- Save Task ----
+
         const submitBtn = overlay.querySelector('#submitTaskBtn');
         submitBtn.addEventListener('click', async () => {
             const titleInput = dynamicContainer.querySelector('#taskTitle');
             if (!titleInput) return;
-        
+
             const title = titleInput.value.trim();
             if (!title) {
                 showNotification('Please enter a title.', true);
                 titleInput.focus();
                 return;
             }
-        
-            // Gather data based on type
+
             let payload = {};
             let endpoint = '';
-        
+
             if (currentType === 'assignment') {
                 const subjectInput = dynamicContainer.querySelector('#taskSubject');
                 const dueDateInput = dynamicContainer.querySelector('#taskDueDate');
@@ -2158,7 +2091,7 @@ function initQuickActions() {
                 };
                 endpoint = `${API_BASE}/api/reminders`;
             }
-        
+
             try {
                 const response = await fetch(endpoint, {
                     method: 'POST',
@@ -2168,14 +2101,13 @@ function initQuickActions() {
                     },
                     body: JSON.stringify(payload)
                 });
-            
+
                 if (!response.ok) {
                     const data = await response.json();
                     showNotification(data.error || `Failed to add ${currentType}.`, true);
                     return;
                 }
-            
-                // Success: refresh relevant sections
+
                 if (currentType === 'assignment') {
                     const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
                     await renderAssignments(activeFilter);
@@ -2186,26 +2118,22 @@ function initQuickActions() {
                 } else if (currentType === 'reminder') {
                     await loadReminders();
                 }
-            
+
                 closeModal();
                 showNotification(`✅ ${currentType.charAt(0).toUpperCase() + currentType.slice(1)} added successfully!`);
-            
             } catch (err) {
                 console.error('Add task error:', err);
                 showNotification('Could not connect to server.', true);
             }
         });
-    
-        // ---- Enter key support for title field (delegated) ----
+
         dynamicContainer.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
                 e.preventDefault();
                 submitBtn.click();
             }
         });
-    
-        // ---- Close modal on Escape (already handled by openModal) ----
-        // But we need to attach the esc handler manually because we didn't use openModal's onSave
+
         const escHandler = (e) => {
             if (e.key === 'Escape') {
                 closeModal();
@@ -2233,22 +2161,12 @@ function animateOnLoad() {
 }
 
 // ===================================================================
-//  UPCOMING DEADLINES
-// ===================================================================
-// ===================================================================
-//  UPDATE DEADLINES (Dashboard)
-// ===================================================================
-// ===================================================================
-//  UPDATE UPCOMING DEADLINES (Dashboard – Assignments + Events)
-// ===================================================================
-// ===================================================================
-//  UPDATE UPCOMING DEADLINES (Dashboard – Assignments + Events)
+//  UPDATE DEADLINES
 // ===================================================================
 async function updateDeadlines() {
     const container = document.getElementById('upcomingDeadlines');
     if (!container) return;
 
-    // 1. Guest mode – show demo deadlines
     if (!isLoggedIn) {
         container.innerHTML = DEMO_DATA.upcomingDeadlines.map(d => `
             <div class="deadline-item ${d.urgency}">
@@ -2263,9 +2181,7 @@ async function updateDeadlines() {
         return;
     }
 
-    // 2. Logged‑in user – fetch assignments + calendar events
     try {
-        // Fetch pending assignments (completed ones won't appear)
         const assignRes = await fetch(`${API_BASE}/api/assignments?userId=${user.id}&filter=pending`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
@@ -2273,7 +2189,6 @@ async function updateDeadlines() {
 
         const assignments = await assignRes.json();
 
-        // Fetch calendar events
         const eventRes = await fetch(`${API_BASE}/api/calendar?userId=${user.id}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
@@ -2281,13 +2196,11 @@ async function updateDeadlines() {
 
         const events = await eventRes.json();
 
-        // 3. Combine and format
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        // Format assignments
         const formattedAssignments = assignments
-            .filter(a => a.due_date) // only those with due date
+            .filter(a => a.due_date)
             .map(a => {
                 const dueDate = new Date(a.due_date);
                 dueDate.setHours(0, 0, 0, 0);
@@ -2306,9 +2219,8 @@ async function updateDeadlines() {
                 };
             });
 
-        // Format calendar events
         const formattedEvents = events
-            .filter(e => e.date_key) // only those with a date
+            .filter(e => e.date_key)
             .map(e => {
                 const [year, month, day] = e.date_key.split('-').map(Number);
                 const eventDate = new Date(year, month - 1, day);
@@ -2328,7 +2240,6 @@ async function updateDeadlines() {
                 };
             });
 
-        // 4. Combine, sort by date (past due first, then closest)
         const combined = [...formattedAssignments, ...formattedEvents];
         combined.sort((a, b) => {
             const aPast = a.daysDiff <= 0;
@@ -2338,13 +2249,11 @@ async function updateDeadlines() {
             return a.daysDiff - b.daysDiff;
         });
 
-        // 5. Render ALL items inside a scrollable container
         if (combined.length === 0) {
             container.innerHTML = '<p style="color:var(--text-tertiary);">No upcoming deadlines or events 🎉</p>';
             return;
         }
 
-        // Build the list with a scrollable wrapper
         let listHtml = `<div style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:0.8rem; padding-right:4px;">`;
         listHtml += combined.map(item => {
             const month = item.dueDate.toLocaleString('default', { month: 'short' });
@@ -2369,10 +2278,199 @@ async function updateDeadlines() {
         listHtml += `</div>`;
 
         container.innerHTML = listHtml;
-
     } catch (err) {
         console.error('Update deadlines error:', err);
         container.innerHTML = '<p style="color:var(--danger);">Failed to load deadlines.</p>';
+    }
+}
+
+// ===================================================================
+//  NOTES FUNCTIONS (NEW)
+// ===================================================================
+async function loadNotes() {
+    const listContainer = document.getElementById('notesListContainer');
+    if (!listContainer) return;
+    if (!isLoggedIn) {
+        listContainer.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">Login to manage notes.</p>';
+        return;
+    }
+    try {
+        const response = await fetch(`${API_BASE}/api/notes?userId=${user.id}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch notes');
+        const data = await response.json();
+        notes = data;
+        renderNoteList();
+        if (!currentNoteId && notes.length > 0) {
+            selectNote(notes[0].id);
+        } else if (notes.length === 0) {
+            clearEditor();
+        }
+    } catch (err) {
+        console.error('Load notes error:', err);
+        listContainer.innerHTML = '<p style="color:var(--danger);">Failed to load notes.</p>';
+    }
+}
+
+function renderNoteList() {
+    const container = document.getElementById('notesListContainer');
+    if (!container) return;
+    const filter = document.getElementById('notesFilter').value.toLowerCase();
+    const filtered = notes.filter(n => {
+        const title = n.title.toLowerCase();
+        const tags = n.tags.toLowerCase();
+        return title.includes(filter) || tags.includes(filter);
+    });
+
+    if (filtered.length === 0) {
+        container.innerHTML = `<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">${notes.length === 0 ? 'No notes yet. Create one!' : 'No matching notes.'}</p>`;
+        return;
+    }
+
+    container.innerHTML = filtered.map(n => {
+        const isActive = n.id === currentNoteId ? 'active' : '';
+        const tagList = n.tags ? n.tags.split(',').filter(t => t.trim()).map(t => `<span style="background:var(--border-light); padding:0.1rem 0.5rem; border-radius:12px; font-size:0.65rem; margin-right:0.2rem;">${escapeHtml(t.trim())}</span>`).join('') : '';
+        return `
+            <div class="note-list-item ${isActive}" data-id="${n.id}" style="padding:0.6rem 0.8rem; border-radius:8px; cursor:pointer; transition:background 0.2s; margin-bottom:0.3rem; ${isActive ? 'background:var(--primary-glow); border-left:3px solid var(--primary);' : 'border-left:3px solid transparent;'}"
+                 onmouseover="this.style.background='var(--hover-surface)'" onmouseout="this.style.background='${isActive ? 'var(--primary-glow)' : 'transparent'}'">
+                <div style="font-weight:600; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(n.title || 'Untitled')}</div>
+                <div style="font-size:0.7rem; color:var(--text-tertiary); display:flex; justify-content:space-between; align-items:center; margin-top:0.2rem;">
+                    <span>${tagList || 'No tags'}</span>
+                    <span>${new Date(n.updated_at).toLocaleDateString()}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    container.querySelectorAll('.note-list-item').forEach(el => {
+        el.addEventListener('click', () => {
+            const id = parseInt(el.dataset.id);
+            selectNote(id);
+        });
+    });
+}
+
+function selectNote(id) {
+    const note = notes.find(n => n.id === id);
+    if (!note) return;
+    currentNoteId = id;
+    document.getElementById('noteTitle').value = note.title || '';
+    document.getElementById('noteContent').value = note.content || '';
+    document.getElementById('noteTags').value = note.tags || '';
+    document.getElementById('noteWordCount').textContent = note.content ? note.content.split(/\s+/).filter(w => w).length + ' words' : '0 words';
+    document.getElementById('noteLastModified').textContent = note.updated_at ? 'Last saved: ' + new Date(note.updated_at).toLocaleString() : '—';
+    renderNoteList();
+    setNoteStatus('Loaded');
+    document.getElementById('saveNoteBtn').disabled = false;
+    document.getElementById('deleteNoteBtn').disabled = false;
+}
+
+function clearEditor() {
+    currentNoteId = null;
+    document.getElementById('noteTitle').value = '';
+    document.getElementById('noteContent').value = '';
+    document.getElementById('noteTags').value = '';
+    document.getElementById('noteWordCount').textContent = '0 words';
+    document.getElementById('noteLastModified').textContent = '—';
+    renderNoteList();
+    setNoteStatus('Ready');
+    document.getElementById('saveNoteBtn').disabled = false;
+    document.getElementById('deleteNoteBtn').disabled = true;
+}
+
+function setNoteStatus(msg) {
+    document.getElementById('noteStatus').textContent = msg;
+}
+
+async function saveCurrentNote() {
+    const title = document.getElementById('noteTitle').value.trim() || 'Untitled';
+    const content = document.getElementById('noteContent').value;
+    const tags = document.getElementById('noteTags').value.trim();
+
+    if (!isLoggedIn) {
+        showNotification('Please log in to save notes.', true);
+        return;
+    }
+
+    setNoteStatus('Saving...');
+
+    try {
+        let response;
+        if (currentNoteId) {
+            response = await fetch(`${API_BASE}/api/notes/${currentNoteId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({ userId: user.id, title, content, tags })
+            });
+        } else {
+            response = await fetch(`${API_BASE}/api/notes`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({ userId: user.id, title, content, tags })
+            });
+        }
+        if (!response.ok) {
+            const data = await response.json();
+            showNotification(data.error || 'Failed to save note.', true);
+            setNoteStatus('Error');
+            return;
+        }
+        const savedNote = await response.json();
+        if (currentNoteId) {
+            const index = notes.findIndex(n => n.id === currentNoteId);
+            if (index !== -1) notes[index] = savedNote;
+        } else {
+            notes.unshift(savedNote);
+            currentNoteId = savedNote.id;
+        }
+        renderNoteList();
+        document.getElementById('noteLastModified').textContent = 'Last saved: ' + new Date(savedNote.updated_at).toLocaleString();
+        setNoteStatus('Saved');
+        showNotification('✅ Note saved.');
+        document.getElementById('noteWordCount').textContent = content ? content.split(/\s+/).filter(w => w).length + ' words' : '0 words';
+        document.getElementById('deleteNoteBtn').disabled = false;
+    } catch (err) {
+        console.error('Save note error:', err);
+        showNotification('Could not connect to server.', true);
+        setNoteStatus('Error');
+    }
+}
+
+async function deleteCurrentNote() {
+    if (!currentNoteId) {
+        showNotification('No note selected.', true);
+        return;
+    }
+    if (!confirm('Delete this note?')) return;
+    try {
+        const response = await fetch(`${API_BASE}/api/notes/${currentNoteId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ userId: user.id })
+        });
+        if (!response.ok) {
+            const data = await response.json();
+            showNotification(data.error || 'Failed to delete note.', true);
+            return;
+        }
+        notes = notes.filter(n => n.id !== currentNoteId);
+        currentNoteId = null;
+        clearEditor();
+        renderNoteList();
+        showNotification('🗑️ Note deleted.');
+    } catch (err) {
+        console.error('Delete note error:', err);
+        showNotification('Could not connect to server.', true);
     }
 }
 
@@ -2443,13 +2541,13 @@ function parseDateKey(key) {
 //  DOM CONTENT LOADED
 // ===================================================================
 document.addEventListener('DOMContentLoaded', async () => {
-    // Show/Hide guest banner
+    // Guest banner
     const banner = document.getElementById('guestBanner');
     if (banner) {
         banner.style.display = isLoggedIn ? 'none' : 'block';
     }
 
-    // Update user name
+    // User name / greeting
     const nameEl = document.getElementById('dashboardUserName');
     if (nameEl) {
         nameEl.textContent = isLoggedIn ? user.name : 'Guest';
@@ -2474,7 +2572,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('notificationList').innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">Login to see notifications.</p>';
     }
 
-    // Init all modules
+    // Init modules
     initNavigation();
     initDarkMode();
     initHamburger();
@@ -2492,6 +2590,54 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateStats();
     updateDeadlines();
 
+    // ===== NOTES INIT =====
+    if (isLoggedIn) {
+        await loadNotes();
+    } else {
+        document.getElementById('notesListContainer').innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">Login to manage notes.</p>';
+    }
+
+    // Notes event listeners
+    document.getElementById('newNoteBtn')?.addEventListener('click', () => {
+        clearEditor();
+        document.getElementById('noteTitle').focus();
+        setNoteStatus('New note');
+    });
+
+    document.getElementById('saveNoteBtn')?.addEventListener('click', saveCurrentNote);
+    document.getElementById('deleteNoteBtn')?.addEventListener('click', deleteCurrentNote);
+
+    const noteTitleInput = document.getElementById('noteTitle');
+    const noteContentInput = document.getElementById('noteContent');
+    const noteTagsInput = document.getElementById('noteTags');
+
+    function autoSave() {
+        if (noteSaveTimeout) clearTimeout(noteSaveTimeout);
+        setNoteStatus('Unsaved changes...');
+        noteSaveTimeout = setTimeout(() => {
+            const title = noteTitleInput.value.trim();
+            const content = noteContentInput.value.trim();
+            if (title || content) {
+                saveCurrentNote();
+            } else {
+                setNoteStatus('Ready');
+            }
+        }, 1500);
+    }
+
+    noteTitleInput?.addEventListener('input', autoSave);
+    noteContentInput?.addEventListener('input', autoSave);
+    noteTagsInput?.addEventListener('input', autoSave);
+
+    document.getElementById('notesFilter')?.addEventListener('input', renderNoteList);
+
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            saveCurrentNote();
+        }
+    });
+
     // Logout
     document.getElementById('logoutBtn')?.addEventListener('click', () => {
         localStorage.removeItem('token');
@@ -2499,7 +2645,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.location.href = 'login.html';
     });
 
-    // --- Add Subject ---
+    // Add Subject
     document.getElementById('addSubjectBtn')?.addEventListener('click', () => {
         if (!requireLogin()) return;
 
@@ -2545,120 +2691,189 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     });
-    
 
-    // --- Add Assignment ---
-    // --- Add Assignment ---
-    // --- Add Assignment ---
-    document.getElementById('addAssignmentBtn')?.addEventListener('click', async () => {
-    if (!requireLogin()) return;
+    // ---- Image Upload for Notes ----
+const insertImageBtn = document.getElementById('insertImageBtn');
+const imageUploadInput = document.getElementById('imageUploadInput');
 
-    // 1. Fetch subjects for dropdown (same as before)
-    let subjectsHtml = '<option value="">Loading subjects...</option>';
-    let subjectsList = [];
+insertImageBtn?.addEventListener('click', () => {
+    if (!isLoggedIn) {
+        requireLogin();
+        return;
+    }
+    imageUploadInput.click();
+});
+
+imageUploadInput?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('image', file);
 
     try {
-        const response = await fetch(`${API_BASE}/api/subjects?userId=${user.id}`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        setNoteStatus('Uploading...');
+        const response = await fetch(`${API_BASE}/api/upload/image`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: formData
         });
-        if (response.ok) {
-            subjectsList = await response.json();
-            if (subjectsList.length === 0) {
-                subjectsHtml = '<option value="">No subjects found. Please add a subject first.</option>';
+        if (!response.ok) {
+            const data = await response.json();
+            showNotification(data.error || 'Upload failed', true);
+            setNoteStatus('Error');
+            return;
+        }
+        const data = await response.json();
+        const imageUrl = data.url;
+
+        // Insert Markdown image at cursor position
+        const textarea = document.getElementById('noteContent');
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        const before = text.substring(0, start);
+        const after = text.substring(end);
+        const markdown = `![image](${imageUrl})`;
+        const newText = before + markdown + after;
+        textarea.value = newText;
+
+        // Set cursor after inserted markdown
+        const cursorPos = start + markdown.length;
+        textarea.setSelectionRange(cursorPos, cursorPos);
+        textarea.focus();
+
+        // Trigger auto-save
+        if (noteSaveTimeout) clearTimeout(noteSaveTimeout);
+        setNoteStatus('Unsaved changes...');
+        noteSaveTimeout = setTimeout(() => {
+            const title = document.getElementById('noteTitle').value.trim();
+            const content = textarea.value.trim();
+            if (title || content) {
+                saveCurrentNote();
             } else {
-                subjectsHtml = subjectsList.map(s =>
-                    `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`
-                ).join('');
-                subjectsHtml = `<option value="">Select a subject...</option>${subjectsHtml}`;
+                setNoteStatus('Ready');
             }
-        } else {
-            subjectsHtml = '<option value="">Failed to load subjects</option>';
-        }
+        }, 500);
+
+        showNotification('✅ Image inserted!');
+        imageUploadInput.value = ''; // reset
     } catch (err) {
-        console.error('Failed to fetch subjects for dropdown:', err);
-        subjectsHtml = '<option value="">Error loading subjects</option>';
+        console.error('Upload error:', err);
+        showNotification('Could not upload image.', true);
+        setNoteStatus('Error');
     }
+});
 
-    // Set today's date in YYYY-MM-DD format for default and min
-    const today = new Date().toISOString().split('T')[0];
+    // Add Assignment
+    document.getElementById('addAssignmentBtn')?.addEventListener('click', async () => {
+        if (!requireLogin()) return;
 
-    // 2. Open the modal with the dynamic dropdown and min date
-    openModal('Add New Assignment', `
-        <div class="form-group">
-            <label for="assignmentTitle">Assignment Title</label>
-            <input type="text" id="assignmentTitle" placeholder="e.g., Binary Trees Homework" required>
-        </div>
-        <div class="form-group">
-            <label for="assignmentSubject">Subject</label>
-            <select id="assignmentSubject" required>
-                ${subjectsHtml}
-            </select>
-            <small style="color:var(--text-tertiary); font-size:0.75rem; display:block; margin-top:0.3rem;">
-                ${subjectsList.length === 0 ? '👉 <a href="#" onclick="document.querySelector(\'[data-page=\'subjects\']\')?.click(); return false;" style="color:var(--primary);">Add a subject first</a>' : ''}
-            </small>
-        </div>
-        <div class="form-group">
-            <label for="assignmentDueDate">Submission Deadline <small style="font-weight:400; color:var(--text-tertiary);">(optional)</small></label>
-            <input type="date" id="assignmentDueDate" value="${today}" min="${today}">
-            <small style="color:var(--text-tertiary); font-size:0.75rem; display:block; margin-top:0.3rem;">
-                The last date you can submit this assignment. You cannot pick a past date.
-            </small>
-        </div>
-    `, async (overlay) => {
-        const titleInput = overlay.querySelector('#assignmentTitle');
-        const subjectSelect = overlay.querySelector('#assignmentSubject');
-        const dueDateInput = overlay.querySelector('#assignmentDueDate');
-
-        const title = titleInput.value.trim();
-        const subject = subjectSelect.value;
-        const dueDate = dueDateInput.value || null;
-
-        if (!title) {
-            showNotification('Please enter a title.', true);
-            return false;
-        }
-        if (!subject) {
-            showNotification('Please select a subject.', true);
-            return false;
-        }
+        let subjectsHtml = '<option value="">Loading subjects...</option>';
+        let subjectsList = [];
 
         try {
-            const res = await fetch(`${API_BASE}/api/assignments`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({
-                    userId: user.id,
-                    title,
-                    subject,
-                    dueDate
-                })
+            const response = await fetch(`${API_BASE}/api/subjects?userId=${user.id}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
+            if (response.ok) {
+                subjectsList = await response.json();
+                if (subjectsList.length === 0) {
+                    subjectsHtml = '<option value="">No subjects found. Please add a subject first.</option>';
+                } else {
+                    subjectsHtml = subjectsList.map(s =>
+                        `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`
+                    ).join('');
+                    subjectsHtml = `<option value="">Select a subject...</option>${subjectsHtml}`;
+                }
+            } else {
+                subjectsHtml = '<option value="">Failed to load subjects</option>';
+            }
+        } catch (err) {
+            console.error('Failed to fetch subjects for dropdown:', err);
+            subjectsHtml = '<option value="">Error loading subjects</option>';
+        }
 
-            if (!res.ok) {
-                const data = await res.json();
-                showNotification(data.error || 'Failed to add assignment.', true);
+        const today = new Date().toISOString().split('T')[0];
+
+        openModal('Add New Assignment', `
+            <div class="form-group">
+                <label for="assignmentTitle">Assignment Title</label>
+                <input type="text" id="assignmentTitle" placeholder="e.g., Binary Trees Homework" required>
+            </div>
+            <div class="form-group">
+                <label for="assignmentSubject">Subject</label>
+                <select id="assignmentSubject" required>
+                    ${subjectsHtml}
+                </select>
+                <small style="color:var(--text-tertiary); font-size:0.75rem; display:block; margin-top:0.3rem;">
+                    ${subjectsList.length === 0 ? '👉 <a href="#" onclick="document.querySelector(\'[data-page=\'subjects\']\')?.click(); return false;" style="color:var(--primary);">Add a subject first</a>' : ''}
+                </small>
+            </div>
+            <div class="form-group">
+                <label for="assignmentDueDate">Submission Deadline <small style="font-weight:400; color:var(--text-tertiary);">(optional)</small></label>
+                <input type="date" id="assignmentDueDate" value="${today}" min="${today}">
+                <small style="color:var(--text-tertiary); font-size:0.75rem; display:block; margin-top:0.3rem;">
+                    The last date you can submit this assignment. You cannot pick a past date.
+                </small>
+            </div>
+        `, async (overlay) => {
+            const titleInput = overlay.querySelector('#assignmentTitle');
+            const subjectSelect = overlay.querySelector('#assignmentSubject');
+            const dueDateInput = overlay.querySelector('#assignmentDueDate');
+
+            const title = titleInput.value.trim();
+            const subject = subjectSelect.value;
+            const dueDate = dueDateInput.value || null;
+
+            if (!title) {
+                showNotification('Please enter a title.', true);
+                return false;
+            }
+            if (!subject) {
+                showNotification('Please select a subject.', true);
                 return false;
             }
 
-            const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
-            await renderAssignments(activeFilter);
-            await updateStats();
-            await loadNotifications();
-            await updateDeadlines(); // refresh dashboard deadlines
-            showNotification('✅ Assignment added successfully!');
-            return true;
-        } catch (err) {
-            console.error('Add assignment error:', err);
-            showNotification('Could not connect to server.', true);
-            return false;
-        }
-    });
+            try {
+                const res = await fetch(`${API_BASE}/api/assignments`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({
+                        userId: user.id,
+                        title,
+                        subject,
+                        dueDate
+                    })
+                });
+
+                if (!res.ok) {
+                    const data = await res.json();
+                    showNotification(data.error || 'Failed to add assignment.', true);
+                    return false;
+                }
+
+                const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
+                await renderAssignments(activeFilter);
+                await updateStats();
+                await loadNotifications();
+                await updateDeadlines();
+                showNotification('✅ Assignment added successfully!');
+                return true;
+            } catch (err) {
+                console.error('Add assignment error:', err);
+                showNotification('Could not connect to server.', true);
+                return false;
+            }
+        });
     });
 
-    // --- Add Reminder ---
+    // Add Reminder
     document.getElementById('addReminderBtn')?.addEventListener('click', () => {
         if (!requireLogin()) return;
         openModal('Set Reminder', `
@@ -2694,7 +2909,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Notification bell
     document.getElementById('notificationBell')?.addEventListener('click', toggleNotifications);
 
-    // Close dropdown on outside click
     document.addEventListener('click', (e) => {
         const container = document.getElementById('notificationContainer');
         if (container && !container.contains(e.target)) {
@@ -2729,10 +2943,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (e) { /* ignore */ }
     });
 
-    // Upcoming deadlines
     updateDeadlines();
-
-    // Refresh icons
     refreshIcons();
 });
 
