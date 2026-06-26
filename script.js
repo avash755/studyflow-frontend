@@ -2251,111 +2251,113 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- Add Assignment ---
     // --- Add Assignment ---
+    // --- Add Assignment ---
     document.getElementById('addAssignmentBtn')?.addEventListener('click', async () => {
-        if (!requireLogin()) return;
+    if (!requireLogin()) return;
 
-        // 1. Fetch the user's subjects to populate the dropdown
-        let subjectsHtml = '<option value="">Loading subjects...</option>';
-        let subjectsList = [];
+    // 1. Fetch subjects for dropdown (same as before)
+    let subjectsHtml = '<option value="">Loading subjects...</option>';
+    let subjectsList = [];
 
-        try {
-            const response = await fetch(`${API_BASE}/api/subjects?userId=${user.id}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (response.ok) {
-                subjectsList = await response.json();
-                if (subjectsList.length === 0) {
-                    subjectsHtml = '<option value="">No subjects found. Please add a subject first.</option>';
-                } else {
-                    subjectsHtml = subjectsList.map(s =>
-                        `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`
-                    ).join('');
-                    subjectsHtml = `<option value="">Select a subject...</option>${subjectsHtml}`;
-                }
+    try {
+        const response = await fetch(`${API_BASE}/api/subjects?userId=${user.id}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (response.ok) {
+            subjectsList = await response.json();
+            if (subjectsList.length === 0) {
+                subjectsHtml = '<option value="">No subjects found. Please add a subject first.</option>';
             } else {
-                subjectsHtml = '<option value="">Failed to load subjects</option>';
+                subjectsHtml = subjectsList.map(s =>
+                    `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`
+                ).join('');
+                subjectsHtml = `<option value="">Select a subject...</option>${subjectsHtml}`;
             }
-        } catch (err) {
-            console.error('Failed to fetch subjects for dropdown:', err);
-            subjectsHtml = '<option value="">Error loading subjects</option>';
+        } else {
+            subjectsHtml = '<option value="">Failed to load subjects</option>';
+        }
+    } catch (err) {
+        console.error('Failed to fetch subjects for dropdown:', err);
+        subjectsHtml = '<option value="">Error loading subjects</option>';
+    }
+
+    // Set today's date in YYYY-MM-DD format for default and min
+    const today = new Date().toISOString().split('T')[0];
+
+    // 2. Open the modal with the dynamic dropdown and min date
+    openModal('Add New Assignment', `
+        <div class="form-group">
+            <label for="assignmentTitle">Assignment Title</label>
+            <input type="text" id="assignmentTitle" placeholder="e.g., Binary Trees Homework" required>
+        </div>
+        <div class="form-group">
+            <label for="assignmentSubject">Subject</label>
+            <select id="assignmentSubject" required>
+                ${subjectsHtml}
+            </select>
+            <small style="color:var(--text-tertiary); font-size:0.75rem; display:block; margin-top:0.3rem;">
+                ${subjectsList.length === 0 ? '👉 <a href="#" onclick="document.querySelector(\'[data-page=\'subjects\']\')?.click(); return false;" style="color:var(--primary);">Add a subject first</a>' : ''}
+            </small>
+        </div>
+        <div class="form-group">
+            <label for="assignmentDueDate">Submission Deadline <small style="font-weight:400; color:var(--text-tertiary);">(optional)</small></label>
+            <input type="date" id="assignmentDueDate" value="${today}" min="${today}">
+            <small style="color:var(--text-tertiary); font-size:0.75rem; display:block; margin-top:0.3rem;">
+                The last date you can submit this assignment. You cannot pick a past date.
+            </small>
+        </div>
+    `, async (overlay) => {
+        const titleInput = overlay.querySelector('#assignmentTitle');
+        const subjectSelect = overlay.querySelector('#assignmentSubject');
+        const dueDateInput = overlay.querySelector('#assignmentDueDate');
+
+        const title = titleInput.value.trim();
+        const subject = subjectSelect.value;
+        const dueDate = dueDateInput.value || null;
+
+        if (!title) {
+            showNotification('Please enter a title.', true);
+            return false;
+        }
+        if (!subject) {
+            showNotification('Please select a subject.', true);
+            return false;
         }
 
-        // Set default due date to today's date
-        const today = new Date().toISOString().split('T')[0];
+        try {
+            const res = await fetch(`${API_BASE}/api/assignments`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    userId: user.id,
+                    title,
+                    subject,
+                    dueDate
+                })
+            });
 
-        // 2. Open the modal with the dynamic dropdown
-        openModal('Add New Assignment', `
-            <div class="form-group">
-                <label for="assignmentTitle">Assignment Title</label>
-                <input type="text" id="assignmentTitle" placeholder="e.g., Binary Trees Homework" required>
-            </div>
-            <div class="form-group">
-                <label for="assignmentSubject">Subject</label>
-                <select id="assignmentSubject" required>
-                    ${subjectsHtml}
-                </select>
-                <small style="color:var(--text-tertiary); font-size:0.75rem; display:block; margin-top:0.3rem;">
-                    ${subjectsList.length === 0 ? '👉 <a href="#" onclick="document.querySelector(\'[data-page=\'subjects\']\')?.click(); return false;" style="color:var(--primary);">Add a subject first</a>' : ''}
-                </small>
-            </div>
-            <div class="form-group">
-                <label for="assignmentDueDate">Submission Deadline <small style="font-weight:400; color:var(--text-tertiary);">(optional)</small></label>
-                <input type="date" id="assignmentDueDate" value="${today}">
-                <small style="color:var(--text-tertiary); font-size:0.75rem; display:block; margin-top:0.3rem;">
-                    The last date you can submit this assignment.
-                </small>
-            </div>
-        `, async (overlay) => {
-            const titleInput = overlay.querySelector('#assignmentTitle');
-            const subjectSelect = overlay.querySelector('#assignmentSubject');
-            const dueDateInput = overlay.querySelector('#assignmentDueDate');
-
-            const title = titleInput.value.trim();
-            const subject = subjectSelect.value;
-            const dueDate = dueDateInput.value || null;
-
-            if (!title) {
-                showNotification('Please enter a title.', true);
-                return false;
-            }
-            if (!subject) {
-                showNotification('Please select a subject.', true);
+            if (!res.ok) {
+                const data = await res.json();
+                showNotification(data.error || 'Failed to add assignment.', true);
                 return false;
             }
 
-            try {
-                const res = await fetch(`${API_BASE}/api/assignments`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    },
-                    body: JSON.stringify({
-                        userId: user.id,
-                        title,
-                        subject,
-                        dueDate
-                    })
-                });
-
-                if (!res.ok) {
-                    const data = await res.json();
-                    showNotification(data.error || 'Failed to add assignment.', true);
-                    return false;
-                }
-
-                const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
-                await renderAssignments(activeFilter);
-                await updateStats();
-                await loadNotifications();
-                showNotification('✅ Assignment added successfully!');
-                return true;
-            } catch (err) {
-                console.error('Add assignment error:', err);
-                showNotification('Could not connect to server.', true);
-                return false;
-            }
-        });
+            const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
+            await renderAssignments(activeFilter);
+            await updateStats();
+            await loadNotifications();
+            await updateDeadlines(); // refresh dashboard deadlines
+            showNotification('✅ Assignment added successfully!');
+            return true;
+        } catch (err) {
+            console.error('Add assignment error:', err);
+            showNotification('Could not connect to server.', true);
+            return false;
+        }
+    });
     });
 
     // --- Add Reminder ---
