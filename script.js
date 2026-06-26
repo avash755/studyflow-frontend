@@ -1970,9 +1970,249 @@ function initQuickActions() {
             }
         });
     });
+    // ========== ADD TASK (Global Quick Action) ==========
     document.getElementById('globalAddTask')?.addEventListener('click', () => {
         if (!requireLogin()) return;
-        showNotification('➕ Add task form would open');
+    
+        // Build the modal content dynamically
+        const modalContent = `
+            <div style="display:flex; gap:0.5rem; margin-bottom:1.2rem; flex-wrap:wrap;" id="taskTypeSelector">
+                <button class="btn btn-primary task-type-btn" data-type="assignment" style="flex:1; justify-content:center;">📋 Assignment</button>
+                <button class="btn btn-secondary task-type-btn" data-type="goal" style="flex:1; justify-content:center;">🎯 Goal</button>
+                <button class="btn btn-secondary task-type-btn" data-type="reminder" style="flex:1; justify-content:center;">⏰ Reminder</button>
+            </div>
+    
+            <!-- Dynamic fields container -->
+            <div id="taskDynamicFields">
+                <!-- Will be populated by JavaScript -->
+            </div>
+    
+            <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1rem;">
+                <button class="btn btn-secondary modal-cancel">Cancel</button>
+                <button class="btn btn-primary" id="submitTaskBtn">💾 Save Task</button>
+            </div>
+        `;
+    
+        // Use openModal with a custom onSave (we'll handle save manually)
+        const container = document.getElementById('modalContainer');
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+            <div class="modal" style="max-width:550px;">
+                <h3 style="display:flex; align-items:center; gap:0.5rem;">
+                    <i data-lucide="plus-circle"></i> Add New Task
+                </h3>
+                <div class="modal-body">${modalContent}</div>
+            </div>
+        `;
+        container.appendChild(overlay);
+    
+        // Close handlers
+        const closeModal = () => overlay.remove();
+        overlay.querySelector('.modal-cancel').addEventListener('click', closeModal);
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) closeModal();
+        });
+    
+        // ---- Dynamic Field Logic ----
+        const typeBtns = overlay.querySelectorAll('.task-type-btn');
+        const dynamicContainer = overlay.querySelector('#taskDynamicFields');
+        let currentType = 'assignment';
+    
+        // Function to render fields based on type
+        function renderFields(type) {
+            // Update button styles
+            typeBtns.forEach(btn => {
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+                if (btn.dataset.type === type) {
+                    btn.classList.remove('btn-secondary');
+                    btn.classList.add('btn-primary');
+                }
+            });
+        
+            currentType = type;
+        
+            let fieldsHtml = '';
+            if (type === 'assignment') {
+                fieldsHtml = `
+                    <div class="form-group">
+                        <label for="taskTitle">Assignment Title</label>
+                        <input type="text" id="taskTitle" placeholder="e.g., Binary Trees Homework" required autofocus>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskSubject">Subject</label>
+                        <input type="text" id="taskSubject" placeholder="e.g., Computer Science" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskDueDate">Due Date <small style="font-weight:400; color:var(--text-tertiary);">(optional)</small></label>
+                        <input type="date" id="taskDueDate" value="${new Date().toISOString().split('T')[0]}">
+                    </div>
+                `;
+            } else if (type === 'goal') {
+                fieldsHtml = `
+                    <div class="form-group">
+                        <label for="taskTitle">Goal Description</label>
+                        <input type="text" id="taskTitle" placeholder="e.g., Finish Chapter 5" required autofocus>
+                    </div>
+                    <div style="color:var(--text-tertiary); font-size:0.85rem; margin-top:-0.5rem; margin-bottom:0.5rem;">
+                        💡 Goals appear on your dashboard under "Today's Goals".
+                    </div>
+                `;
+            } else if (type === 'reminder') {
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const defaultDateTime = tomorrow.toISOString().slice(0, 16);
+                fieldsHtml = `
+                    <div class="form-group">
+                        <label for="taskTitle">Reminder Title</label>
+                        <input type="text" id="taskTitle" placeholder="e.g., Call the dentist" required autofocus>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskReminderTime">Date & Time</label>
+                        <input type="datetime-local" id="taskReminderTime" value="${defaultDateTime}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskRepeat">Repeat</label>
+                        <select id="taskRepeat">
+                            <option value="none">Never</option>
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                        </select>
+                    </div>
+                `;
+            }
+            dynamicContainer.innerHTML = fieldsHtml;
+        
+            // Re-focus the title input after render
+            const titleInput = dynamicContainer.querySelector('#taskTitle');
+            if (titleInput) setTimeout(() => titleInput.focus(), 100);
+        
+            // Refresh Lucide icons (if any)
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    
+        // ---- Event Listeners for type buttons ----
+        typeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                renderFields(btn.dataset.type);
+            });
+        });
+    
+        // Initial render (assignment)
+        renderFields('assignment');
+    
+        // ---- Save Task ----
+        const submitBtn = overlay.querySelector('#submitTaskBtn');
+        submitBtn.addEventListener('click', async () => {
+            const titleInput = dynamicContainer.querySelector('#taskTitle');
+            if (!titleInput) return;
+        
+            const title = titleInput.value.trim();
+            if (!title) {
+                showNotification('Please enter a title.', true);
+                titleInput.focus();
+                return;
+            }
+        
+            // Gather data based on type
+            let payload = {};
+            let endpoint = '';
+        
+            if (currentType === 'assignment') {
+                const subjectInput = dynamicContainer.querySelector('#taskSubject');
+                const dueDateInput = dynamicContainer.querySelector('#taskDueDate');
+                const subject = subjectInput ? subjectInput.value.trim() : '';
+                if (!subject) {
+                    showNotification('Please enter a subject.', true);
+                    subjectInput.focus();
+                    return;
+                }
+                payload = {
+                    userId: user.id,
+                    title,
+                    subject,
+                    dueDate: dueDateInput ? dueDateInput.value || null : null
+                };
+                endpoint = `${API_BASE}/api/assignments`;
+            } else if (currentType === 'goal') {
+                payload = {
+                    userId: user.id,
+                    text: title
+                };
+                endpoint = `${API_BASE}/api/goals`;
+            } else if (currentType === 'reminder') {
+                const dateTimeInput = dynamicContainer.querySelector('#taskReminderTime');
+                const repeatSelect = dynamicContainer.querySelector('#taskRepeat');
+                if (!dateTimeInput || !dateTimeInput.value) {
+                    showNotification('Please select a date and time.', true);
+                    dateTimeInput.focus();
+                    return;
+                }
+                payload = {
+                    userId: user.id,
+                    title,
+                    reminderTime: dateTimeInput.value,
+                    repeat: repeatSelect ? repeatSelect.value : 'none'
+                };
+                endpoint = `${API_BASE}/api/reminders`;
+            }
+        
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+            
+                if (!response.ok) {
+                    const data = await response.json();
+                    showNotification(data.error || `Failed to add ${currentType}.`, true);
+                    return;
+                }
+            
+                // Success: refresh relevant sections
+                if (currentType === 'assignment') {
+                    const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
+                    await renderAssignments(activeFilter);
+                    await updateStats();
+                    await updateDeadlines();
+                } else if (currentType === 'goal') {
+                    await renderGoals();
+                } else if (currentType === 'reminder') {
+                    await loadReminders();
+                }
+            
+                closeModal();
+                showNotification(`✅ ${currentType.charAt(0).toUpperCase() + currentType.slice(1)} added successfully!`);
+            
+            } catch (err) {
+                console.error('Add task error:', err);
+                showNotification('Could not connect to server.', true);
+            }
+        });
+    
+        // ---- Enter key support for title field (delegated) ----
+        dynamicContainer.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+                e.preventDefault();
+                submitBtn.click();
+            }
+        });
+    
+        // ---- Close modal on Escape (already handled by openModal) ----
+        // But we need to attach the esc handler manually because we didn't use openModal's onSave
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
     });
 }
 
@@ -1998,79 +2238,137 @@ function animateOnLoad() {
 // ===================================================================
 //  UPDATE DEADLINES (Dashboard)
 // ===================================================================
+// ===================================================================
+//  UPDATE UPCOMING DEADLINES (Dashboard – Assignments + Events)
+// ===================================================================
+// ===================================================================
+//  UPDATE UPCOMING DEADLINES (Dashboard – Assignments + Events)
+// ===================================================================
 async function updateDeadlines() {
     const container = document.getElementById('upcomingDeadlines');
     if (!container) return;
 
-    // 1. Guest mode – show demo deadlines (optional)
+    // 1. Guest mode – show demo deadlines
     if (!isLoggedIn) {
         container.innerHTML = DEMO_DATA.upcomingDeadlines.map(d => `
             <div class="deadline-item ${d.urgency}">
                 <div class="deadline-date"><span class="date-day">${d.due.split(' ')[0]}</span><span>${d.due.split(' ')[1]}</span></div>
-                <div class="deadline-content"><strong>${escapeHtml(d.title)}</strong><div>${escapeHtml(d.subject)}</div></div>
+                <div class="deadline-content">
+                    <strong>${escapeHtml(d.title)}</strong>
+                    <div>${escapeHtml(d.subject)}</div>
+                </div>
                 <span class="deadline-badge">${d.urgency === 'urgent' ? '2 days left' : d.urgency === 'warning' ? '6 days left' : '11 days left'}</span>
             </div>
         `).join('');
         return;
     }
 
-    // 2. Logged‑in user – fetch real assignments
+    // 2. Logged‑in user – fetch assignments + calendar events
     try {
-        const response = await fetch(`${API_BASE}/api/assignments?userId=${user.id}&filter=pending`, {
+        // Fetch pending assignments (completed ones won't appear)
+        const assignRes = await fetch(`${API_BASE}/api/assignments?userId=${user.id}&filter=pending`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
-        if (!response.ok) throw new Error('Failed to fetch assignments');
+        if (!assignRes.ok) throw new Error('Failed to fetch assignments');
 
-        const assignments = await response.json();
+        const assignments = await assignRes.json();
 
-        // Filter only those with a due_date (if you want to show all pending, remove this filter)
-        const withDueDate = assignments.filter(a => a.due_date);
-        // Sort by due date (closest first)
-        withDueDate.sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+        // Fetch calendar events
+        const eventRes = await fetch(`${API_BASE}/api/calendar?userId=${user.id}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!eventRes.ok) throw new Error('Failed to fetch calendar events');
 
-        // Take up to 5 most urgent
-        const upcoming = withDueDate.slice(0, 5);
+        const events = await eventRes.json();
 
-        if (upcoming.length === 0) {
-            container.innerHTML = '<p style="color:var(--text-tertiary);">No upcoming deadlines</p>';
-            return;
-        }
-
+        // 3. Combine and format
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        container.innerHTML = upcoming.map(a => {
-            const dueDate = new Date(a.due_date);
-            dueDate.setHours(0, 0, 0, 0);
-            const daysDiff = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+        // Format assignments
+        const formattedAssignments = assignments
+            .filter(a => a.due_date) // only those with due date
+            .map(a => {
+                const dueDate = new Date(a.due_date);
+                dueDate.setHours(0, 0, 0, 0);
+                const daysDiff = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+                return {
+                    type: 'assignment',
+                    id: a.id,
+                    title: a.title,
+                    subject: a.subject,
+                    dueDate: dueDate,
+                    daysDiff: daysDiff,
+                    color: '#4f46e5',
+                    icon: '📋',
+                    urgency: daysDiff <= 2 ? 'urgent' : daysDiff <= 5 ? 'warning' : 'normal',
+                    urgencyText: daysDiff <= 0 ? 'Past due!' : `${daysDiff} days left`
+                };
+            });
 
-            // Determine urgency
-            let urgencyClass = 'normal';
-            let urgencyText = `${daysDiff} days left`;
-            if (daysDiff <= 2) {
-                urgencyClass = 'urgent';
-                urgencyText = `${daysDiff} days left ⚠️`;
-            } else if (daysDiff <= 5) {
-                urgencyClass = 'warning';
-                urgencyText = `${daysDiff} days left`;
-            } else if (daysDiff > 0) {
-                urgencyText = `${daysDiff} days left`;
-            } else {
-                urgencyText = 'Past due!';
-                urgencyClass = 'urgent';
-            }
+        // Format calendar events
+        const formattedEvents = events
+            .filter(e => e.date_key) // only those with a date
+            .map(e => {
+                const [year, month, day] = e.date_key.split('-').map(Number);
+                const eventDate = new Date(year, month - 1, day);
+                eventDate.setHours(0, 0, 0, 0);
+                const daysDiff = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
+                return {
+                    type: 'event',
+                    id: e.id,
+                    title: e.title,
+                    subject: e.time ? `🕐 ${e.time}` : 'No time set',
+                    dueDate: eventDate,
+                    daysDiff: daysDiff,
+                    color: e.color || '#4f46e5',
+                    icon: '📅',
+                    urgency: daysDiff <= 2 ? 'urgent' : daysDiff <= 5 ? 'warning' : 'normal',
+                    urgencyText: daysDiff <= 0 ? 'Past due!' : `${daysDiff} days left`
+                };
+            });
 
-            const month = dueDate.toLocaleString('default', { month: 'short' });
-            const day = dueDate.getDate();
+        // 4. Combine, sort by date (past due first, then closest)
+        const combined = [...formattedAssignments, ...formattedEvents];
+        combined.sort((a, b) => {
+            const aPast = a.daysDiff <= 0;
+            const bPast = b.daysDiff <= 0;
+            if (aPast && !bPast) return -1;
+            if (!aPast && bPast) return 1;
+            return a.daysDiff - b.daysDiff;
+        });
+
+        // 5. Render ALL items inside a scrollable container
+        if (combined.length === 0) {
+            container.innerHTML = '<p style="color:var(--text-tertiary);">No upcoming deadlines or events 🎉</p>';
+            return;
+        }
+
+        // Build the list with a scrollable wrapper
+        let listHtml = `<div style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:0.8rem; padding-right:4px;">`;
+        listHtml += combined.map(item => {
+            const month = item.dueDate.toLocaleString('default', { month: 'short' });
+            const day = item.dueDate.getDate();
 
             return `
-                <div class="deadline-item ${urgencyClass}">
-                    <div class="deadline-date"><span class="date-day">${day}</span><span>${month}</span></div>
-                    <div class="deadline-content"><strong>${escapeHtml(a.title)}</strong><div>${escapeHtml(a.subject)}</div></div>
-                    <span class="deadline-badge">${urgencyText}</span>
+                <div class="deadline-item ${item.urgency}" style="border-left-color: ${item.color}; flex-shrink:0;">
+                    <div class="deadline-date" style="background:${item.color}20; color:${item.color};">
+                        <span class="date-day">${day}</span>
+                        <span>${month}</span>
+                    </div>
+                    <div class="deadline-content">
+                        <strong>${item.icon} ${escapeHtml(item.title)}</strong>
+                        <div>${escapeHtml(item.subject)}</div>
+                    </div>
+                    <span class="deadline-badge" style="background:${item.color}20; color:${item.color};">
+                        ${item.daysDiff <= 0 ? '⚠️ Past due' : item.urgencyText}
+                    </span>
                 </div>
             `;
         }).join('');
+        listHtml += `</div>`;
+
+        container.innerHTML = listHtml;
 
     } catch (err) {
         console.error('Update deadlines error:', err);

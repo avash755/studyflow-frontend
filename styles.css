@@ -1487,3 +1487,38 @@ body.dark .hamburger {
 body.dark .hamburger:hover {
     background: rgba(0, 0, 0, 0.35) !important;
 }
+
+/* Scrollable deadlines container */
+#upcomingDeadlines > div::-webkit-scrollbar {
+    width: 6px;
+}
+#upcomingDeadlines > div::-webkit-scrollbar-track {
+    background: var(--border-light);
+    border-radius: 10px;
+}
+#upcomingDeadlines > div::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: 10px;
+}
+#upcomingDeadlines > div::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-light);
+}
+
+/* Task type selector buttons */
+.task-type-btn {
+    transition: all 0.25s var(--ease-spring);
+}
+.task-type-btn.btn-primary {
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    color: white;
+    box-shadow: 0 4px 14px var(--primary-glow);
+    transform: scale(1.02);
+}
+.task-type-btn.btn-secondary {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+}
+.task-type-btn.btn-secondary:hover {
+    background: var(--hover-surface);
+}
