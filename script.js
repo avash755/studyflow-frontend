@@ -1995,9 +1995,14 @@ function animateOnLoad() {
 // ===================================================================
 //  UPCOMING DEADLINES
 // ===================================================================
-function updateDeadlines() {
+// ===================================================================
+//  UPDATE DEADLINES (Dashboard)
+// ===================================================================
+async function updateDeadlines() {
     const container = document.getElementById('upcomingDeadlines');
     if (!container) return;
+
+    // 1. Guest mode – show demo deadlines (optional)
     if (!isLoggedIn) {
         container.innerHTML = DEMO_DATA.upcomingDeadlines.map(d => `
             <div class="deadline-item ${d.urgency}">
@@ -2008,7 +2013,69 @@ function updateDeadlines() {
         `).join('');
         return;
     }
-    container.innerHTML = '<p style="color:var(--text-tertiary);">No upcoming deadlines</p>';
+
+    // 2. Logged‑in user – fetch real assignments
+    try {
+        const response = await fetch(`${API_BASE}/api/assignments?userId=${user.id}&filter=pending`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch assignments');
+
+        const assignments = await response.json();
+
+        // Filter only those with a due_date (if you want to show all pending, remove this filter)
+        const withDueDate = assignments.filter(a => a.due_date);
+        // Sort by due date (closest first)
+        withDueDate.sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+
+        // Take up to 5 most urgent
+        const upcoming = withDueDate.slice(0, 5);
+
+        if (upcoming.length === 0) {
+            container.innerHTML = '<p style="color:var(--text-tertiary);">No upcoming deadlines</p>';
+            return;
+        }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        container.innerHTML = upcoming.map(a => {
+            const dueDate = new Date(a.due_date);
+            dueDate.setHours(0, 0, 0, 0);
+            const daysDiff = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+
+            // Determine urgency
+            let urgencyClass = 'normal';
+            let urgencyText = `${daysDiff} days left`;
+            if (daysDiff <= 2) {
+                urgencyClass = 'urgent';
+                urgencyText = `${daysDiff} days left ⚠️`;
+            } else if (daysDiff <= 5) {
+                urgencyClass = 'warning';
+                urgencyText = `${daysDiff} days left`;
+            } else if (daysDiff > 0) {
+                urgencyText = `${daysDiff} days left`;
+            } else {
+                urgencyText = 'Past due!';
+                urgencyClass = 'urgent';
+            }
+
+            const month = dueDate.toLocaleString('default', { month: 'short' });
+            const day = dueDate.getDate();
+
+            return `
+                <div class="deadline-item ${urgencyClass}">
+                    <div class="deadline-date"><span class="date-day">${day}</span><span>${month}</span></div>
+                    <div class="deadline-content"><strong>${escapeHtml(a.title)}</strong><div>${escapeHtml(a.subject)}</div></div>
+                    <span class="deadline-badge">${urgencyText}</span>
+                </div>
+            `;
+        }).join('');
+
+    } catch (err) {
+        console.error('Update deadlines error:', err);
+        container.innerHTML = '<p style="color:var(--danger);">Failed to load deadlines.</p>';
+    }
 }
 
 // ===================================================================
@@ -2125,6 +2192,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     animateOnLoad();
     loadSubjects();
     updateStats();
+    updateDeadlines();
 
     // Logout
     document.getElementById('logoutBtn')?.addEventListener('click', () => {
