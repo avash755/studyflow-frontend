@@ -12,6 +12,13 @@
     <link rel="stylesheet" href="styles.css">
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Quill CSS -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <!-- Quill JS -->
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    <!-- Quill Image Resize Module (CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/quill-image-resize-module@3.0.0/image-resize.min.js"></script>
 </head>
 <body>
     <button class="hamburger" id="hamburgerBtn" aria-label="Menu">
@@ -258,6 +265,7 @@
         </div>
 
         <!-- Notes Page -->
+        <!-- Notes Page -->
         <div class="page" id="notes-page">
             <header class="page-header">
                 <div>
@@ -271,10 +279,11 @@
                     <button class="btn btn-primary" id="newNoteBtn"><i data-lucide="plus"></i> New Note</button>
                 </div>
             </header>
-            <div class="notes-container" style="display:flex; gap:1.5rem; height:calc(100vh - 180px); min-height:400px;">
+
+            <div class="notes-container" style="display:flex; gap:1.5rem; height:calc(100vh - 180px); min-height:500px;">
             
                 <!-- Left: List -->
-                <div class="notes-list" style="flex:0 0 300px; background:var(--surface); border-radius:16px; border:1px solid var(--border); overflow:hidden; display:flex; flex-direction:column;">
+                <div class="notes-list" style="flex:0 0 320px; background:var(--surface); border-radius:16px; border:1px solid var(--border); overflow:hidden; display:flex; flex-direction:column;">
                     <div style="padding:0.75rem 1rem; border-bottom:1px solid var(--border);">
                         <input type="text" id="notesFilter" placeholder="Search notes..." style="width:100%; padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text-primary);">
                     </div>
@@ -286,22 +295,28 @@
             
                 <!-- Right: Editor -->
                 <div class="notes-editor" style="flex:1; background:var(--surface); border-radius:16px; border:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden;">
-                    <!-- Toolbar -->
-                    <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 1rem; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:0.5rem;">
-                        <div style="display:flex; gap:0.5rem; align-items:center; flex:1;">
-                            <input type="text" id="noteTitle" placeholder="Note title..." style="flex:1; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text-primary); font-weight:600; font-size:1rem;">
-                            <input type="text" id="noteTags" placeholder="Tags (comma separated)" style="flex:0 0 180px; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text-primary); font-size:0.85rem;">
+                    <!-- Toolbar: Title + Tags + Actions -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 1rem; border-bottom:1px solid var(--border); background:var(--surface-elevated); gap:0.75rem; flex-wrap:wrap;">
+                        <div style="display:flex; gap:0.5rem; align-items:center; flex:1; min-width:200px; flex-wrap:wrap;">
+                            <input type="text" id="noteTitle" placeholder="Note title..." style="flex:1; min-width:120px; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text-primary); font-weight:600; font-size:0.95rem;">
+                            <input type="text" id="noteTags" placeholder="Tags (comma separated)" style="flex:0 1 160px; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text-primary); font-size:0.8rem;">
                         </div>
-                        <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                            <button class="btn btn-secondary btn-sm" id="insertImageBtn" title="Insert Image"><i data-lucide="image"></i></button>
-                            <span id="noteStatus" style="font-size:0.75rem; color:var(--text-tertiary);">Ready</span>
-                            <button class="btn btn-secondary btn-sm" id="saveNoteBtn"><i data-lucide="save"></i> Save</button>
-                            <button class="btn btn-danger btn-sm" id="deleteNoteBtn"><i data-lucide="trash-2"></i></button>
+                        <div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;">
+                            <button class="btn-icon btn-sm" id="previewNoteBtn" title="Preview" style="width:32px; height:32px; border-radius:8px; background:var(--bg); border:1px solid var(--border); color:var(--text-secondary); transition:all 0.2s;">
+                                <i data-lucide="eye" style="width:16px; height:16px;"></i>
+                            </button>
+                            <span id="noteStatus" style="font-size:0.7rem; color:var(--text-tertiary); padding:0 0.25rem; min-width:60px; text-align:center;">Ready</span>
+                            <button class="btn btn-secondary btn-sm" id="saveNoteBtn" style="padding:0.3rem 0.8rem; font-size:0.75rem;">
+                                <i data-lucide="save" style="width:14px; height:14px;"></i> Save
+                            </button>
+                            <button class="btn btn-danger btn-sm" id="deleteNoteBtn" style="padding:0.3rem 0.8rem; font-size:0.75rem;">
+                                <i data-lucide="trash-2" style="width:14px; height:14px;"></i>
+                            </button>
                         </div>
                     </div>
-                    <input type="file" id="imageUploadInput" accept="image/*" style="display:none;">
-                    <!-- Editor area -->
-                    <textarea id="noteContent" style="flex:1; padding:1rem; border:none; background:var(--surface); color:var(--text-primary); font-family:var(--font-body); font-size:0.95rem; resize:none; outline:none;" placeholder="Start writing..."></textarea>
+                    <!-- Quill Editor Container -->
+                    <div id="quillEditor" style="flex:1; background:var(--surface); overflow-y:auto; position:relative;"></div>
+                    <!-- Status Bar -->
                     <div style="padding:0.5rem 1rem; border-top:1px solid var(--border); font-size:0.75rem; color:var(--text-tertiary); display:flex; justify-content:space-between;">
                         <span id="noteWordCount">0 words</span>
                         <span id="noteLastModified">Last saved: —</span>

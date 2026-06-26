@@ -1556,3 +1556,27 @@ body.dark .hamburger:hover {
 #noteContent {
     line-height: 1.6;
 }
+
+/* Notes toolbar icon buttons */
+.btn-icon.btn-sm {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    transition: all 0.2s var(--ease-spring);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+.btn-icon.btn-sm:hover {
+    background: var(--primary-glow);
+    border-color: var(--primary);
+    color: var(--primary);
+    transform: translateY(-1px);
+}
+.btn-icon.btn-sm:active {
+    transform: scale(0.95);
+}

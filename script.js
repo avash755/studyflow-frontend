@@ -1,13 +1,107 @@
-let notes = [];
-let currentNoteId = null;
-let noteSaveTimeout = null;
+// ===================================================================
+//  GLOBAL HELPERS
+// ===================================================================
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    });
+}
 
-// Alarm state
+function showNotification(msg, isError = false) {
+    const existing = document.querySelector('.notification');
+    if (existing) existing.remove();
+    const div = document.createElement('div');
+    div.className = 'notification';
+    div.textContent = msg;
+    div.style.background = isError ? 'var(--danger)' : 'var(--primary)';
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 2800);
+}
+
+function timeAgo(dateString) {
+    const now = new Date();
+    const past = new Date(dateString);
+    const diff = Math.floor((now - past) / 1000);
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+}
+
+function refreshIcons() {
+    if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+    }
+}
+
+// ===================================================================
+//  AUTH STATE
+// ===================================================================
+const token = localStorage.getItem('token');
+const isLoggedIn = !!token;
+const user = JSON.parse(localStorage.getItem('user') || '{}');
+console.log('👋 Welcome,', isLoggedIn ? user.name : 'Guest');
+
+const API_BASE = 'https://studyflow-2kcz.onrender.com';
+
+// ===================================================================
+//  DEMO DATA (for guests)
+// ===================================================================
+const DEMO_DATA = {
+    subjects: [
+        { id: 1, name: 'Computer Science', assignments_count: 8, notes_count: 24 },
+        { id: 2, name: 'Mathematics', assignments_count: 6, notes_count: 18 },
+        { id: 3, name: 'Physics', assignments_count: 5, notes_count: 15 },
+        { id: 4, name: 'Chemistry', assignments_count: 7, notes_count: 12 },
+        { id: 5, name: 'English Literature', assignments_count: 4, notes_count: 20 },
+        { id: 6, name: 'History', assignments_count: 6, notes_count: 16 }
+    ],
+    assignments: [
+        { id: 1, title: 'Data Structures - Binary Tree', subject: 'CS', due_date: '2026-04-24', completed: false },
+        { id: 2, title: 'Calculus Problem Set', subject: 'Math', due_date: '2026-04-28', completed: false },
+        { id: 3, title: 'Physics Lab Report', subject: 'Physics', due_date: '2026-04-20', completed: true }
+    ],
+    goals: [
+        { id: 1, text: 'Complete CS assignment', done: false },
+        { id: 2, text: 'Review calculus notes', done: false }
+    ],
+    reminders: [
+        { id: 1, title: 'Submit math homework', reminder_time: new Date(Date.now() + 3600000).toISOString(), repeat: 'none' }
+    ],
+    calendarEvents: [
+        { id: 1, title: 'Study Group', date_key: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })(), time: '15:00', color: '#4f46e5' }
+    ],
+    schedule: [
+        { subject: 'Computer Science', day: 0, start_time: '09:00', end_time: '10:30', location: 'Room 101', color_class: 'color-cs' },
+        { subject: 'Mathematics', day: 1, start_time: '11:00', end_time: '12:30', location: 'Room 205', color_class: 'color-math' },
+        { subject: 'Physics', day: 2, start_time: '13:00', end_time: '14:30', location: 'Lab 3', color_class: 'color-physics' },
+        { subject: 'Chemistry', day: 3, start_time: '09:00', end_time: '10:30', location: 'Lab 1', color_class: 'color-chemistry' },
+        { subject: 'English Literature', day: 4, start_time: '14:00', end_time: '15:30', location: 'Room 310', color_class: 'color-english' }
+    ],
+    upcomingDeadlines: [
+        { title: 'Data Structures Assignment', subject: 'CS', due: 'Apr 24', urgency: 'urgent' },
+        { title: 'Calculus Midterm', subject: 'Math', due: 'Apr 28', urgency: 'warning' },
+        { title: 'Research Paper Draft', subject: 'English', due: 'May 03', urgency: 'normal' }
+    ],
+    recentActivity: [
+        { type: 'assignment_completed', message: 'Completed Physics Lab Report', created_at: new Date(Date.now() - 7200000).toISOString() },
+        { type: 'subject_added', message: 'Added Chemistry notes', created_at: new Date(Date.now() - 18000000).toISOString() },
+        { type: 'study_session_complete', message: 'Studied Calculus 3h', created_at: new Date(Date.now() - 86400000).toISOString() }
+    ],
+    stats: { subjects: 6, pending: 12, studyTime: '24h', completion: '85%' }
+};
+
+// ===================================================================
+//  ALARM SYSTEM (for Pomodoro)
+// ===================================================================
 let alarmInterval = null;
 let alarmAudioCtx = null;
 let isAlarmActive = false;
 
-// ---------- ALARM SOUND (repeating beep) ----------
 function playAlarmBeep() {
     try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -84,104 +178,7 @@ function showAlarmModal(title, message) {
 }
 
 // ===================================================================
-//  GLOBAL HELPERS
-// ===================================================================
-function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/[&<>]/g, function(m) {
-        if (m === '&') return '&amp;';
-        if (m === '<') return '&lt;';
-        if (m === '>') return '&gt;';
-        return m;
-    });
-}
-
-function showNotification(msg, isError = false) {
-    const existing = document.querySelector('.notification');
-    if (existing) existing.remove();
-    const div = document.createElement('div');
-    div.className = 'notification';
-    div.textContent = msg;
-    div.style.background = isError ? 'var(--danger)' : 'var(--primary)';
-    document.body.appendChild(div);
-    setTimeout(() => div.remove(), 2800);
-}
-
-function timeAgo(dateString) {
-    const now = new Date();
-    const past = new Date(dateString);
-    const diff = Math.floor((now - past) / 1000);
-    if (diff < 60) return 'Just now';
-    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
-    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-    return Math.floor(diff / 86400) + 'd ago';
-}
-
-function refreshIcons() {
-    if (typeof lucide !== 'undefined' && lucide.createIcons) {
-        lucide.createIcons();
-    }
-}
-
-// ===================================================================
-//  AUTH STATE
-// ===================================================================
-const token = localStorage.getItem('token');
-const isLoggedIn = !!token;
-const user = JSON.parse(localStorage.getItem('user') || '{}');
-console.log('👋 Welcome,', isLoggedIn ? user.name : 'Guest');
-
-const API_BASE = 'https://studyflow-2kcz.onrender.com';
-
-// ===================================================================
-//  DEMO DATA
-// ===================================================================
-const DEMO_DATA = {
-    subjects: [
-        { id: 1, name: 'Computer Science', assignments_count: 8, notes_count: 24 },
-        { id: 2, name: 'Mathematics', assignments_count: 6, notes_count: 18 },
-        { id: 3, name: 'Physics', assignments_count: 5, notes_count: 15 },
-        { id: 4, name: 'Chemistry', assignments_count: 7, notes_count: 12 },
-        { id: 5, name: 'English Literature', assignments_count: 4, notes_count: 20 },
-        { id: 6, name: 'History', assignments_count: 6, notes_count: 16 }
-    ],
-    assignments: [
-        { id: 1, title: 'Data Structures - Binary Tree', subject: 'CS', due_date: '2026-04-24', completed: false },
-        { id: 2, title: 'Calculus Problem Set', subject: 'Math', due_date: '2026-04-28', completed: false },
-        { id: 3, title: 'Physics Lab Report', subject: 'Physics', due_date: '2026-04-20', completed: true }
-    ],
-    goals: [
-        { id: 1, text: 'Complete CS assignment', done: false },
-        { id: 2, text: 'Review calculus notes', done: false }
-    ],
-    reminders: [
-        { id: 1, title: 'Submit math homework', reminder_time: new Date(Date.now() + 3600000).toISOString(), repeat: 'none' }
-    ],
-    calendarEvents: [
-        { id: 1, title: 'Study Group', date_key: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })(), time: '15:00', color: '#4f46e5' }
-    ],
-    schedule: [
-        { subject: 'Computer Science', day: 0, start_time: '09:00', end_time: '10:30', location: 'Room 101', color_class: 'color-cs' },
-        { subject: 'Mathematics', day: 1, start_time: '11:00', end_time: '12:30', location: 'Room 205', color_class: 'color-math' },
-        { subject: 'Physics', day: 2, start_time: '13:00', end_time: '14:30', location: 'Lab 3', color_class: 'color-physics' },
-        { subject: 'Chemistry', day: 3, start_time: '09:00', end_time: '10:30', location: 'Lab 1', color_class: 'color-chemistry' },
-        { subject: 'English Literature', day: 4, start_time: '14:00', end_time: '15:30', location: 'Room 310', color_class: 'color-english' }
-    ],
-    upcomingDeadlines: [
-        { title: 'Data Structures Assignment', subject: 'CS', due: 'Apr 24', urgency: 'urgent' },
-        { title: 'Calculus Midterm', subject: 'Math', due: 'Apr 28', urgency: 'warning' },
-        { title: 'Research Paper Draft', subject: 'English', due: 'May 03', urgency: 'normal' }
-    ],
-    recentActivity: [
-        { type: 'assignment_completed', message: 'Completed Physics Lab Report', created_at: new Date(Date.now() - 7200000).toISOString() },
-        { type: 'subject_added', message: 'Added Chemistry notes', created_at: new Date(Date.now() - 18000000).toISOString() },
-        { type: 'study_session_complete', message: 'Studied Calculus 3h', created_at: new Date(Date.now() - 86400000).toISOString() }
-    ],
-    stats: { subjects: 6, pending: 12, studyTime: '24h', completion: '85%' }
-};
-
-// ===================================================================
-//  REQUIRE LOGIN
+//  REQUIRE LOGIN MODAL
 // ===================================================================
 function requireLogin() {
     if (isLoggedIn) return true;
@@ -347,7 +344,7 @@ async function loadRecentActivities() {
 }
 
 // ===================================================================
-//  UPDATE STATS
+//  UPDATE STATS (Dashboard)
 // ===================================================================
 async function updateStats() {
     if (!isLoggedIn) {
@@ -378,7 +375,7 @@ async function updateStats() {
 }
 
 // ===================================================================
-//  LOAD STATS
+//  LOAD STATS (XP, Level, Steady stats)
 // ===================================================================
 async function loadStats() {
     if (!isLoggedIn) {
@@ -1090,7 +1087,7 @@ function initCalendar() {
 }
 
 // ===================================================================
-//  CLASS SCHEDULE
+//  CLASS SCHEDULE (Weekly view with 7 days)
 // ===================================================================
 async function loadSchedule() {
     if (!isLoggedIn) {
@@ -2285,8 +2282,106 @@ async function updateDeadlines() {
 }
 
 // ===================================================================
-//  NOTES FUNCTIONS (NEW)
+//  NOTES FUNCTIONS (with Quill Rich Editor)
 // ===================================================================
+let quill = null; // Quill editor instance
+
+function initQuill() {
+    if (quill) return;
+    const editorContainer = document.getElementById('quillEditor');
+    if (!editorContainer) return;
+
+    const toolbarOptions = [
+        ['bold', 'italic', 'underline', 'strike'],
+        ['blockquote', 'code-block'],
+        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+        [{ 'indent': '-1'}, { 'indent': '+1' }],
+        [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+        [{ 'color': [] }, { 'background': [] }],
+        [{ 'align': [] }],
+        ['link', 'image', 'video'],
+        ['clean']
+    ];
+
+    quill = new Quill(editorContainer, {
+        theme: 'snow',
+        modules: {
+            toolbar: toolbarOptions,
+            imageResize: {
+                displaySize: true,
+                modules: ['Resize', 'DisplaySize']
+            }
+        },
+        placeholder: 'Start writing...',
+        formats: ['header', 'bold', 'italic', 'underline', 'strike', 'blockquote', 'code-block', 'list', 'indent', 'link', 'image', 'video', 'color', 'background', 'align']
+    });
+
+    // ---- Image Upload Handler ----
+    const imageHandler = () => {
+        if (!isLoggedIn) { requireLogin(); return; }
+        const input = document.createElement('input');
+        input.setAttribute('type', 'file');
+        input.setAttribute('accept', 'image/*');
+        input.click();
+        input.onchange = async () => {
+            const file = input.files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('image', file);
+            try {
+                setNoteStatus('Uploading...');
+                const response = await fetch(`${API_BASE}/api/upload/image`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    body: formData
+                });
+                if (!response.ok) {
+                    const data = await response.json();
+                    showNotification(data.error || 'Upload failed', true);
+                    setNoteStatus('Error');
+                    return;
+                }
+                const data = await response.json();
+                const range = quill.getSelection();
+                const index = range ? range.index : quill.getLength();
+                quill.insertEmbed(index, 'image', data.url);
+                quill.setSelection(index + 1);
+                setNoteStatus('Image inserted');
+                // Trigger auto-save
+                autoSaveQuill();
+            } catch (err) {
+                console.error('Upload error:', err);
+                showNotification('Could not upload image.', true);
+                setNoteStatus('Error');
+            }
+        };
+    };
+
+    const toolbar = quill.getModule('toolbar');
+    if (toolbar) {
+        toolbar.addHandler('image', imageHandler);
+    }
+
+    // ---- Auto-save on text change ----
+    quill.on('text-change', () => {
+        autoSaveQuill();
+    });
+}
+
+function autoSaveQuill() {
+    if (noteSaveTimeout) clearTimeout(noteSaveTimeout);
+    setNoteStatus('Unsaved changes...');
+    noteSaveTimeout = setTimeout(() => {
+        const title = document.getElementById('noteTitle').value.trim();
+        const content = quill.root.innerHTML.trim();
+        if (title || content) {
+            saveCurrentNote();
+        } else {
+            setNoteStatus('Ready');
+        }
+    }, 1500);
+}
+
 async function loadNotes() {
     const listContainer = document.getElementById('notesListContainer');
     if (!listContainer) return;
@@ -2302,6 +2397,7 @@ async function loadNotes() {
         const data = await response.json();
         notes = data;
         renderNoteList();
+        initQuill(); // ensure quill is initialized
         if (!currentNoteId && notes.length > 0) {
             selectNote(notes[0].id);
         } else if (notes.length === 0) {
@@ -2330,18 +2426,37 @@ function renderNoteList() {
 
     container.innerHTML = filtered.map(n => {
         const isActive = n.id === currentNoteId ? 'active' : '';
-        const tagList = n.tags ? n.tags.split(',').filter(t => t.trim()).map(t => `<span style="background:var(--border-light); padding:0.1rem 0.5rem; border-radius:12px; font-size:0.65rem; margin-right:0.2rem;">${escapeHtml(t.trim())}</span>`).join('') : '';
+        let thumbnail = '';
+        // Extract first image URL from content (if any)
+        if (n.content) {
+            const match = n.content.match(/<img[^>]+src=["']([^"']+)["']/);
+            if (match) thumbnail = match[1];
+        }
+        const tagList = n.tags ? n.tags.split(',').filter(t => t.trim()).map(t => 
+            `<span style="background:var(--border-light); padding:0.1rem 0.5rem; border-radius:12px; font-size:0.6rem; margin-right:0.2rem;">${escapeHtml(t.trim())}</span>`
+        ).join('') : '';
+
         return `
-            <div class="note-list-item ${isActive}" data-id="${n.id}" style="padding:0.6rem 0.8rem; border-radius:8px; cursor:pointer; transition:background 0.2s; margin-bottom:0.3rem; ${isActive ? 'background:var(--primary-glow); border-left:3px solid var(--primary);' : 'border-left:3px solid transparent;'}"
+            <div class="note-list-item ${isActive}" data-id="${n.id}" 
+                 style="display:flex; align-items:center; gap:0.75rem; padding:0.6rem 0.8rem; border-radius:8px; cursor:pointer; transition:background 0.2s; margin-bottom:0.3rem; ${isActive ? 'background:var(--primary-glow); border-left:3px solid var(--primary);' : 'border-left:3px solid transparent;'}"
                  onmouseover="this.style.background='var(--hover-surface)'" onmouseout="this.style.background='${isActive ? 'var(--primary-glow)' : 'transparent'}'">
-                <div style="font-weight:600; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(n.title || 'Untitled')}</div>
-                <div style="font-size:0.7rem; color:var(--text-tertiary); display:flex; justify-content:space-between; align-items:center; margin-top:0.2rem;">
-                    <span>${tagList || 'No tags'}</span>
-                    <span>${new Date(n.updated_at).toLocaleDateString()}</span>
+                ${thumbnail ? `<div style="flex-shrink:0; width:36px; height:36px; border-radius:6px; overflow:hidden; background:var(--border-light);">
+                    <img src="${escapeHtml(thumbnail)}" alt="thumbnail" style="width:100%; height:100%; object-fit:cover;">
+                </div>` : `<div style="flex-shrink:0; width:36px; height:36px; border-radius:6px; background:var(--border-light); display:flex; align-items:center; justify-content:center; color:var(--text-tertiary); font-size:0.8rem;">
+                    <i data-lucide="file-text" style="width:18px; height:18px;"></i>
+                </div>`}
+                <div style="flex:1; min-width:0;">
+                    <div style="font-weight:600; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(n.title || 'Untitled')}</div>
+                    <div style="font-size:0.7rem; color:var(--text-tertiary); display:flex; justify-content:space-between; align-items:center; margin-top:0.2rem; flex-wrap:wrap; gap:0.2rem;">
+                        <span>${tagList || 'No tags'}</span>
+                        <span>${new Date(n.updated_at).toLocaleDateString()}</span>
+                    </div>
                 </div>
             </div>
         `;
     }).join('');
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 
     container.querySelectorAll('.note-list-item').forEach(el => {
         el.addEventListener('click', () => {
@@ -2356,9 +2471,13 @@ function selectNote(id) {
     if (!note) return;
     currentNoteId = id;
     document.getElementById('noteTitle').value = note.title || '';
-    document.getElementById('noteContent').value = note.content || '';
     document.getElementById('noteTags').value = note.tags || '';
-    document.getElementById('noteWordCount').textContent = note.content ? note.content.split(/\s+/).filter(w => w).length + ' words' : '0 words';
+    if (quill) {
+        quill.root.innerHTML = note.content || '';
+        const text = quill.getText();
+        const words = text ? text.trim().split(/\s+/).filter(w => w).length : 0;
+        document.getElementById('noteWordCount').textContent = words + ' words';
+    }
     document.getElementById('noteLastModified').textContent = note.updated_at ? 'Last saved: ' + new Date(note.updated_at).toLocaleString() : '—';
     renderNoteList();
     setNoteStatus('Loaded');
@@ -2369,9 +2488,11 @@ function selectNote(id) {
 function clearEditor() {
     currentNoteId = null;
     document.getElementById('noteTitle').value = '';
-    document.getElementById('noteContent').value = '';
     document.getElementById('noteTags').value = '';
-    document.getElementById('noteWordCount').textContent = '0 words';
+    if (quill) {
+        quill.root.innerHTML = '';
+        document.getElementById('noteWordCount').textContent = '0 words';
+    }
     document.getElementById('noteLastModified').textContent = '—';
     renderNoteList();
     setNoteStatus('Ready');
@@ -2385,7 +2506,7 @@ function setNoteStatus(msg) {
 
 async function saveCurrentNote() {
     const title = document.getElementById('noteTitle').value.trim() || 'Untitled';
-    const content = document.getElementById('noteContent').value;
+    const content = quill ? quill.root.innerHTML : '';
     const tags = document.getElementById('noteTags').value.trim();
 
     if (!isLoggedIn) {
@@ -2434,7 +2555,11 @@ async function saveCurrentNote() {
         document.getElementById('noteLastModified').textContent = 'Last saved: ' + new Date(savedNote.updated_at).toLocaleString();
         setNoteStatus('Saved');
         showNotification('✅ Note saved.');
-        document.getElementById('noteWordCount').textContent = content ? content.split(/\s+/).filter(w => w).length + ' words' : '0 words';
+        if (quill) {
+            const text = quill.getText();
+            const words = text ? text.trim().split(/\s+/).filter(w => w).length : 0;
+            document.getElementById('noteWordCount').textContent = words + ' words';
+        }
         document.getElementById('deleteNoteBtn').disabled = false;
     } catch (err) {
         console.error('Save note error:', err);
@@ -2502,7 +2627,7 @@ function initAssignments() {
 }
 
 // ===================================================================
-//  GLOBAL VARIABLES (must be declared before DOMContentLoaded)
+//  GLOBAL VARIABLES (declared before DOMContentLoaded)
 // ===================================================================
 let pomodoroInterval = null;
 let pomodoroTime = 25 * 60;
@@ -2527,6 +2652,9 @@ let totalSteadySessions = parseInt(localStorage.getItem('totalSteadySessions')) 
 let streak = parseInt(localStorage.getItem('steadyStreak')) || 0;
 let lastDate = localStorage.getItem('lastSteadyDate');
 let reminderCheckInterval = null;
+let notes = [];
+let currentNoteId = null;
+let noteSaveTimeout = null;
 
 function formatDateKey(year, month, day) {
     return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -2638,6 +2766,34 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // ---- Note Preview Button ----
+    document.getElementById('previewNoteBtn')?.addEventListener('click', () => {
+        const content = document.getElementById('noteContent')?.value || '';
+        const title = document.getElementById('noteTitle').value || 'Untitled';
+        if (!content && !title) {
+            showNotification('Nothing to preview.', true);
+            return;
+        }
+        // Convert HTML content to plain text preview? For Quill we can just show the HTML.
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+            <div class="modal" style="max-width:700px; max-height:90vh; overflow-y:auto;">
+                <h3>${escapeHtml(title)}</h3>
+                <div style="border-top:1px solid var(--border); margin-top:0.5rem; padding-top:1rem;">
+                    <div id="previewContent" style="color:var(--text-primary); line-height:1.6;">${content}</div>
+                </div>
+                <div class="modal-actions" style="margin-top:1rem;">
+                    <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Close</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) overlay.remove();
+        });
+    });
+
     // Logout
     document.getElementById('logoutBtn')?.addEventListener('click', () => {
         localStorage.removeItem('token');
@@ -2645,10 +2801,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.location.href = 'login.html';
     });
 
-    // Add Subject
+    // ---- Add Subject ----
     document.getElementById('addSubjectBtn')?.addEventListener('click', () => {
         if (!requireLogin()) return;
-
         openModal('Add New Subject', `
             <div class="form-group">
                 <label for="subjectName">Subject Name</label>
@@ -2657,12 +2812,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         `, async (overlay) => {
             const nameInput = overlay.querySelector('#subjectName');
             const name = nameInput.value.trim();
-
             if (!name) {
                 showNotification('Please enter a subject name.', true);
                 return false;
             }
-
             try {
                 const res = await fetch(`${API_BASE}/api/subjects`, {
                     method: 'POST',
@@ -2672,13 +2825,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     },
                     body: JSON.stringify({ userId: user.id, name })
                 });
-
                 if (!res.ok) {
                     const data = await res.json();
                     showNotification(data.error || 'Failed to add subject.', true);
                     return false;
                 }
-
                 await loadSubjects();
                 await updateStats();
                 await loadNotifications();
@@ -2692,82 +2843,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    // ---- Image Upload for Notes ----
-const insertImageBtn = document.getElementById('insertImageBtn');
-const imageUploadInput = document.getElementById('imageUploadInput');
-
-insertImageBtn?.addEventListener('click', () => {
-    if (!isLoggedIn) {
-        requireLogin();
-        return;
-    }
-    imageUploadInput.click();
-});
-
-imageUploadInput?.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append('image', file);
-
-    try {
-        setNoteStatus('Uploading...');
-        const response = await fetch(`${API_BASE}/api/upload/image`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: formData
-        });
-        if (!response.ok) {
-            const data = await response.json();
-            showNotification(data.error || 'Upload failed', true);
-            setNoteStatus('Error');
-            return;
-        }
-        const data = await response.json();
-        const imageUrl = data.url;
-
-        // Insert Markdown image at cursor position
-        const textarea = document.getElementById('noteContent');
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const text = textarea.value;
-        const before = text.substring(0, start);
-        const after = text.substring(end);
-        const markdown = `![image](${imageUrl})`;
-        const newText = before + markdown + after;
-        textarea.value = newText;
-
-        // Set cursor after inserted markdown
-        const cursorPos = start + markdown.length;
-        textarea.setSelectionRange(cursorPos, cursorPos);
-        textarea.focus();
-
-        // Trigger auto-save
-        if (noteSaveTimeout) clearTimeout(noteSaveTimeout);
-        setNoteStatus('Unsaved changes...');
-        noteSaveTimeout = setTimeout(() => {
-            const title = document.getElementById('noteTitle').value.trim();
-            const content = textarea.value.trim();
-            if (title || content) {
-                saveCurrentNote();
-            } else {
-                setNoteStatus('Ready');
-            }
-        }, 500);
-
-        showNotification('✅ Image inserted!');
-        imageUploadInput.value = ''; // reset
-    } catch (err) {
-        console.error('Upload error:', err);
-        showNotification('Could not upload image.', true);
-        setNoteStatus('Error');
-    }
-});
-
-    // Add Assignment
+    // ---- Add Assignment ----
     document.getElementById('addAssignmentBtn')?.addEventListener('click', async () => {
         if (!requireLogin()) return;
 
@@ -2873,7 +2949,7 @@ imageUploadInput?.addEventListener('change', async (e) => {
         });
     });
 
-    // Add Reminder
+    // ---- Add Reminder ----
     document.getElementById('addReminderBtn')?.addEventListener('click', () => {
         if (!requireLogin()) return;
         openModal('Set Reminder', `
