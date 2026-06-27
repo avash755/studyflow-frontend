@@ -240,8 +240,8 @@ async function loadNotifications() {
     const badge = document.getElementById('notificationBadge');
     const list = document.getElementById('notificationList');
     if (!isLoggedIn) {
-        badge.style.display = 'none';
-        list.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">Login to see notifications.</p>';
+        if (badge) badge.style.display = 'none';
+        if (list) list.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">Login to see notifications.</p>';
         return;
     }
     try {
@@ -251,31 +251,36 @@ async function loadNotifications() {
         });
         if (!response.ok) throw new Error('Failed to fetch activities');
         const data = await response.json();
-        if (data.unreadCount > 0) {
-            badge.style.display = 'inline';
-            badge.textContent = data.unreadCount;
-        } else {
-            badge.style.display = 'none';
+        if (badge) {
+            if (data.unreadCount > 0) {
+                badge.style.display = 'inline';
+                badge.textContent = data.unreadCount;
+            } else {
+                badge.style.display = 'none';
+            }
         }
         if (!data.activities || data.activities.length === 0) {
-            list.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">No notifications yet</p>';
+            if (list) list.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">No notifications yet</p>';
             return;
         }
-        list.innerHTML = data.activities.map(a => `
-            <div class="notification-item ${a.is_read ? '' : 'unread'}">
-                <div>${escapeHtml(a.message)}</div>
-                <span class="time">${timeAgo(a.created_at)}</span>
-            </div>
-        `).join('');
+        if (list) {
+            list.innerHTML = data.activities.map(a => `
+                <div class="notification-item ${a.is_read ? '' : 'unread'}">
+                    <div>${escapeHtml(a.message)}</div>
+                    <span class="time">${timeAgo(a.created_at)}</span>
+                </div>
+            `).join('');
+        }
         refreshIcons();
     } catch (err) {
         console.error('Load notifications error:', err);
-        list.innerHTML = '<p style="color:var(--danger);">Failed to load.</p>';
+        if (list) list.innerHTML = '<p style="color:var(--danger);">Failed to load.</p>';
     }
 }
 
 function toggleNotifications() {
     const dropdown = document.getElementById('notificationDropdown');
+    if (!dropdown) return;
     const isOpen = dropdown.classList.toggle('open');
     if (isOpen) {
         markAllRead();
@@ -294,7 +299,8 @@ async function markAllRead() {
             },
             body: JSON.stringify({ userId: user.id })
         });
-        document.getElementById('notificationBadge').style.display = 'none';
+        const badge = document.getElementById('notificationBadge');
+        if (badge) badge.style.display = 'none';
     } catch (err) {
         console.error('Mark all read error:', err);
     }
@@ -348,10 +354,14 @@ async function loadRecentActivities() {
 // ===================================================================
 async function updateStats() {
     if (!isLoggedIn) {
-        document.getElementById('statSubjects').textContent = DEMO_DATA.stats.subjects;
-        document.getElementById('statPending').textContent = DEMO_DATA.stats.pending;
-        document.getElementById('statStudyHours').textContent = DEMO_DATA.stats.studyTime;
-        document.getElementById('statCompletion').textContent = DEMO_DATA.stats.completion;
+        const subj = document.getElementById('statSubjects');
+        const pend = document.getElementById('statPending');
+        const study = document.getElementById('statStudyHours');
+        const comp = document.getElementById('statCompletion');
+        if (subj) subj.textContent = DEMO_DATA.stats.subjects;
+        if (pend) pend.textContent = DEMO_DATA.stats.pending;
+        if (study) study.textContent = DEMO_DATA.stats.studyTime;
+        if (comp) comp.textContent = DEMO_DATA.stats.completion;
         return;
     }
     try {
@@ -360,14 +370,16 @@ async function updateStats() {
         });
         if (subRes.ok) {
             const subjects = await subRes.json();
-            document.getElementById('statSubjects').textContent = subjects.length;
+            const el = document.getElementById('statSubjects');
+            if (el) el.textContent = subjects.length;
         }
         const assignRes = await fetch(`${API_BASE}/api/assignments?userId=${user.id}&filter=pending`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         if (assignRes.ok) {
             const pending = await assignRes.json();
-            document.getElementById('statPending').textContent = pending.length;
+            const el = document.getElementById('statPending');
+            if (el) el.textContent = pending.length;
         }
     } catch (err) {
         console.error('Failed to update stats:', err);
@@ -1834,6 +1846,7 @@ function initNavigation() {
             }
             if (pageId === 'calendar-page') renderCalendar();
             if (pageId === 'schedule-page') renderSchedule();
+            if (pageId === 'progress-page') loadProgress();
         });
     });
 }
@@ -1914,13 +1927,18 @@ function initQuickActions() {
                 document.getElementById('addReminderBtn')?.click();
             } else if (action === 'progress') {
                 if (!requireLogin()) return;
-                showNotification('📊 Progress page coming soon!');
+                // Navigate to progress page
+                document.querySelector('.nav-link[data-page="progress"]')?.click();
             } else {
                 showNotification('✨ Feature coming soon!');
             }
         });
     });
 
+    // Progress refresh button
+    document.getElementById('progressRefreshBtn')?.addEventListener('click', loadProgress);
+
+    // Global Add Task
     document.getElementById('globalAddTask')?.addEventListener('click', () => {
         if (!requireLogin()) return;
 
@@ -2627,6 +2645,190 @@ function initAssignments() {
 }
 
 // ===================================================================
+//  PROGRESS – CHARTS (NEW)
+// ===================================================================
+let xpChart = null;
+let studyChart = null;
+let tasksChart = null;
+let comparisonChart = null;
+
+async function loadProgress() {
+    if (!isLoggedIn) {
+        showNotification('Please log in to see your progress.', true);
+        return;
+    }
+
+    try {
+        const dailyRes = await fetch(`${API_BASE}/api/progress/daily?userId=${user.id}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!dailyRes.ok) throw new Error('Failed to fetch daily data');
+        const dailyData = await dailyRes.json();
+
+        const compRes = await fetch(`${API_BASE}/api/progress/comparison?userId=${user.id}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!compRes.ok) throw new Error('Failed to fetch comparison');
+        const compData = await compRes.json();
+
+        // Update stats cards
+        const totalXp = dailyData.reduce((sum, d) => sum + d.xp, 0);
+        const totalStudySecs = dailyData.reduce((sum, d) => sum + d.studySeconds, 0);
+        const totalTasks = dailyData.reduce((sum, d) => sum + d.assignmentsCompleted + d.goalsCompleted, 0);
+
+        const xpEl = document.getElementById('progressTotalXp');
+        const hoursEl = document.getElementById('progressTotalHours');
+        const tasksEl = document.getElementById('progressTasksDone');
+        const streakEl = document.getElementById('progressStreak');
+
+        if (xpEl) xpEl.textContent = totalXp;
+        if (hoursEl) hoursEl.textContent = Math.round(totalStudySecs / 3600) + 'h';
+        if (tasksEl) tasksEl.textContent = totalTasks;
+        if (streakEl) streakEl.textContent = streak + ' days';
+
+        // Render charts
+        renderProgressCharts(dailyData, compData);
+    } catch (err) {
+        console.error('Load progress error:', err);
+        showNotification('Failed to load progress data.', true);
+    }
+}
+
+function renderProgressCharts(dailyData, compData) {
+    if (typeof Chart === 'undefined') {
+        console.warn('Chart.js is not loaded. Progress charts will not render.');
+        return;
+    }
+
+    const labels = dailyData.map(d => {
+        const date = new Date(d.date);
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    });
+
+    const xpData = dailyData.map(d => d.xp);
+    const studyMins = dailyData.map(d => Math.round(d.studySeconds / 60));
+    const tasksData = dailyData.map(d => d.assignmentsCompleted + d.goalsCompleted);
+
+    // 1. XP Chart (Line)
+    const xpCanvas = document.getElementById('xpChart');
+    if (xpCanvas) {
+        if (xpChart) xpChart.destroy();
+        xpChart = new Chart(xpCanvas, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'XP Earned',
+                    data: xpData,
+                    borderColor: '#4f46e5',
+                    backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+
+    // 2. Study Time Chart (Bar)
+    const studyCanvas = document.getElementById('studyChart');
+    if (studyCanvas) {
+        if (studyChart) studyChart.destroy();
+        studyChart = new Chart(studyCanvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Minutes',
+                    data: studyMins,
+                    backgroundColor: 'rgba(99, 102, 241, 0.6)',
+                    borderColor: '#6366f1',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+
+    // 3. Tasks Completed (Line)
+    const tasksCanvas = document.getElementById('tasksChart');
+    if (tasksCanvas) {
+        if (tasksChart) tasksChart.destroy();
+        tasksChart = new Chart(tasksCanvas, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Tasks Done',
+                    data: tasksData,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+
+    // 4. Comparison Chart (Bar)
+    const compCanvas = document.getElementById('comparisonChart');
+    if (compCanvas) {
+        if (comparisonChart) comparisonChart.destroy();
+        const current = compData.currentMonth;
+        const previous = compData.previousMonth;
+
+        comparisonChart = new Chart(compCanvas, {
+            type: 'bar',
+            data: {
+                labels: ['XP', 'Study (min)', 'Tasks'],
+                datasets: [
+                    {
+                        label: current.label,
+                        data: [
+                            current.xp,
+                            Math.round(current.studySeconds / 60),
+                            current.assignments + current.goals
+                        ],
+                        backgroundColor: 'rgba(79, 70, 229, 0.7)',
+                        borderColor: '#4f46e5',
+                        borderWidth: 2
+                    },
+                    {
+                        label: previous.label,
+                        data: [
+                            previous.xp,
+                            Math.round(previous.studySeconds / 60),
+                            previous.assignments + previous.goals
+                        ],
+                        backgroundColor: 'rgba(148, 163, 184, 0.7)',
+                        borderColor: '#94a3b8',
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'top' } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+}
+
+// ===================================================================
 //  GLOBAL VARIABLES (declared before DOMContentLoaded)
 // ===================================================================
 let pomodoroInterval = null;
@@ -2691,13 +2893,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         await loadNotifications();
         await loadRecentActivities();
     } else {
-        document.getElementById('activityTimeline').innerHTML = DEMO_DATA.recentActivity.map(a => `
-            <div>
-                ${a.type === 'assignment_completed' ? '✅' : a.type === 'subject_added' ? '📚' : '🧘'} ${escapeHtml(a.message)}
-                <span class="activity-time">${timeAgo(a.created_at)}</span>
-            </div>
-        `).join('');
-        document.getElementById('notificationList').innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">Login to see notifications.</p>';
+        const actEl = document.getElementById('activityTimeline');
+        if (actEl) {
+            actEl.innerHTML = DEMO_DATA.recentActivity.map(a => `
+                <div>
+                    ${a.type === 'assignment_completed' ? '✅' : a.type === 'subject_added' ? '📚' : '🧘'} ${escapeHtml(a.message)}
+                    <span class="activity-time">${timeAgo(a.created_at)}</span>
+                </div>
+            `).join('');
+        }
+        const notifEl = document.getElementById('notificationList');
+        if (notifEl) notifEl.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">Login to see notifications.</p>';
     }
 
     // Init modules
@@ -2722,7 +2928,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (isLoggedIn) {
         await loadNotes();
     } else {
-        document.getElementById('notesListContainer').innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">Login to manage notes.</p>';
+        const notesContainer = document.getElementById('notesListContainer');
+        if (notesContainer) notesContainer.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">Login to manage notes.</p>';
     }
 
     // Notes event listeners
@@ -2743,8 +2950,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (noteSaveTimeout) clearTimeout(noteSaveTimeout);
         setNoteStatus('Unsaved changes...');
         noteSaveTimeout = setTimeout(() => {
-            const title = noteTitleInput.value.trim();
-            const content = noteContentInput.value.trim();
+            const title = noteTitleInput?.value.trim() || '';
+            const content = noteContentInput?.value.trim() || '';
             if (title || content) {
                 saveCurrentNote();
             } else {
@@ -2768,13 +2975,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ---- Note Preview Button ----
     document.getElementById('previewNoteBtn')?.addEventListener('click', () => {
-        const content = document.getElementById('noteContent')?.value || '';
-        const title = document.getElementById('noteTitle').value || 'Untitled';
+        const content = noteContentInput?.value || '';
+        const title = noteTitleInput?.value || 'Untitled';
         if (!content && !title) {
             showNotification('Nothing to preview.', true);
             return;
         }
-        // Convert HTML content to plain text preview? For Quill we can just show the HTML.
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
         overlay.innerHTML = `
@@ -3007,7 +3213,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             Notification.requestPermission();
         }
     } else {
-        document.getElementById('remindersList').innerHTML = `<div class="empty-state"><i data-lucide="bell"></i><p>Login to manage reminders.</p></div>`;
+        const remEl = document.getElementById('remindersList');
+        if (remEl) remEl.innerHTML = `<div class="empty-state"><i data-lucide="bell"></i><p>Login to manage reminders.</p></div>`;
         refreshIcons();
     }
 
