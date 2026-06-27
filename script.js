@@ -11,6 +11,10 @@ function escapeHtml(str) {
     });
 }
 
+function toggleSidebar() {
+    document.body.classList.toggle('sidebar-hidden');
+}
+
 function showNotification(msg, isError = false) {
     const existing = document.querySelector('.notification');
     if (existing) existing.remove();
@@ -240,8 +244,8 @@ async function loadNotifications() {
     const badge = document.getElementById('notificationBadge');
     const list = document.getElementById('notificationList');
     if (!isLoggedIn) {
-        if (badge) badge.style.display = 'none';
-        if (list) list.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">Login to see notifications.</p>';
+        badge.style.display = 'none';
+        list.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">Login to see notifications.</p>';
         return;
     }
     try {
@@ -251,36 +255,31 @@ async function loadNotifications() {
         });
         if (!response.ok) throw new Error('Failed to fetch activities');
         const data = await response.json();
-        if (badge) {
-            if (data.unreadCount > 0) {
-                badge.style.display = 'inline';
-                badge.textContent = data.unreadCount;
-            } else {
-                badge.style.display = 'none';
-            }
+        if (data.unreadCount > 0) {
+            badge.style.display = 'inline';
+            badge.textContent = data.unreadCount;
+        } else {
+            badge.style.display = 'none';
         }
         if (!data.activities || data.activities.length === 0) {
-            if (list) list.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">No notifications yet</p>';
+            list.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">No notifications yet</p>';
             return;
         }
-        if (list) {
-            list.innerHTML = data.activities.map(a => `
-                <div class="notification-item ${a.is_read ? '' : 'unread'}">
-                    <div>${escapeHtml(a.message)}</div>
-                    <span class="time">${timeAgo(a.created_at)}</span>
-                </div>
-            `).join('');
-        }
+        list.innerHTML = data.activities.map(a => `
+            <div class="notification-item ${a.is_read ? '' : 'unread'}">
+                <div>${escapeHtml(a.message)}</div>
+                <span class="time">${timeAgo(a.created_at)}</span>
+            </div>
+        `).join('');
         refreshIcons();
     } catch (err) {
         console.error('Load notifications error:', err);
-        if (list) list.innerHTML = '<p style="color:var(--danger);">Failed to load.</p>';
+        list.innerHTML = '<p style="color:var(--danger);">Failed to load.</p>';
     }
 }
 
 function toggleNotifications() {
     const dropdown = document.getElementById('notificationDropdown');
-    if (!dropdown) return;
     const isOpen = dropdown.classList.toggle('open');
     if (isOpen) {
         markAllRead();
@@ -299,8 +298,7 @@ async function markAllRead() {
             },
             body: JSON.stringify({ userId: user.id })
         });
-        const badge = document.getElementById('notificationBadge');
-        if (badge) badge.style.display = 'none';
+        document.getElementById('notificationBadge').style.display = 'none';
     } catch (err) {
         console.error('Mark all read error:', err);
     }
@@ -354,14 +352,10 @@ async function loadRecentActivities() {
 // ===================================================================
 async function updateStats() {
     if (!isLoggedIn) {
-        const subj = document.getElementById('statSubjects');
-        const pend = document.getElementById('statPending');
-        const study = document.getElementById('statStudyHours');
-        const comp = document.getElementById('statCompletion');
-        if (subj) subj.textContent = DEMO_DATA.stats.subjects;
-        if (pend) pend.textContent = DEMO_DATA.stats.pending;
-        if (study) study.textContent = DEMO_DATA.stats.studyTime;
-        if (comp) comp.textContent = DEMO_DATA.stats.completion;
+        document.getElementById('statSubjects').textContent = DEMO_DATA.stats.subjects;
+        document.getElementById('statPending').textContent = DEMO_DATA.stats.pending;
+        document.getElementById('statStudyHours').textContent = DEMO_DATA.stats.studyTime;
+        document.getElementById('statCompletion').textContent = DEMO_DATA.stats.completion;
         return;
     }
     try {
@@ -370,16 +364,14 @@ async function updateStats() {
         });
         if (subRes.ok) {
             const subjects = await subRes.json();
-            const el = document.getElementById('statSubjects');
-            if (el) el.textContent = subjects.length;
+            document.getElementById('statSubjects').textContent = subjects.length;
         }
         const assignRes = await fetch(`${API_BASE}/api/assignments?userId=${user.id}&filter=pending`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         if (assignRes.ok) {
             const pending = await assignRes.json();
-            const el = document.getElementById('statPending');
-            if (el) el.textContent = pending.length;
+            document.getElementById('statPending').textContent = pending.length;
         }
     } catch (err) {
         console.error('Failed to update stats:', err);
@@ -1844,9 +1836,9 @@ function initNavigation() {
                 sidebar.classList.remove('open');
                 if (overlay) overlay.classList.remove('active');
             }
+            if (pageId === 'progress-page') loadProgress();
             if (pageId === 'calendar-page') renderCalendar();
             if (pageId === 'schedule-page') renderSchedule();
-            if (pageId === 'progress-page') loadProgress();
         });
     });
 }
@@ -1926,19 +1918,16 @@ function initQuickActions() {
             } else if (action === 'reminder') {
                 document.getElementById('addReminderBtn')?.click();
             } else if (action === 'progress') {
-                if (!requireLogin()) return;
-                // Navigate to progress page
                 document.querySelector('.nav-link[data-page="progress"]')?.click();
+            }else if (action === 'progress') {
+                if (!requireLogin()) return;
+                showNotification('📊 Progress page coming soon!');
             } else {
                 showNotification('✨ Feature coming soon!');
             }
         });
     });
 
-    // Progress refresh button
-    document.getElementById('progressRefreshBtn')?.addEventListener('click', loadProgress);
-
-    // Global Add Task
     document.getElementById('globalAddTask')?.addEventListener('click', () => {
         if (!requireLogin()) return;
 
@@ -2427,6 +2416,189 @@ async function loadNotes() {
     }
 }
 
+async function loadProgress() {
+    const container = document.getElementById('progressContent');
+    if (!container) return;
+
+    if (!isLoggedIn) {
+        container.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:2rem;">Login to see your progress.</p>';
+        return;
+    }
+
+    try {
+        // Fetch all data in parallel
+        const [statsRes, subjectsRes, assignmentsRes, goalsRes, notesRes, calendarRes, remindersRes] = await Promise.all([
+            fetch(`${API_BASE}/api/stats?userId=${user.id}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            }),
+            fetch(`${API_BASE}/api/subjects?userId=${user.id}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            }),
+            fetch(`${API_BASE}/api/assignments?userId=${user.id}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            }),
+            fetch(`${API_BASE}/api/goals?userId=${user.id}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            }),
+            fetch(`${API_BASE}/api/notes?userId=${user.id}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            }),
+            fetch(`${API_BASE}/api/calendar?userId=${user.id}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            }),
+            fetch(`${API_BASE}/api/reminders?userId=${user.id}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            })
+        ]);
+
+        const stats = statsRes.ok ? await statsRes.json() : { xp: 0, level: 1, total_focus_seconds: 0, total_sessions: 0, streak: 0 };
+        const subjects = subjectsRes.ok ? await subjectsRes.json() : [];
+        const assignments = assignmentsRes.ok ? await assignmentsRes.json() : [];
+        const goals = goalsRes.ok ? await goalsRes.json() : [];
+        const notes = notesRes.ok ? await notesRes.json() : [];
+        const calendarEvents = calendarRes.ok ? await calendarRes.json() : [];
+        const reminders = remindersRes.ok ? await remindersRes.json() : [];
+
+        // Compute derived stats
+        const totalSubjects = subjects.length;
+        const totalAssignments = assignments.length;
+        const completedAssignments = assignments.filter(a => a.completed).length;
+        const totalGoals = goals.length;
+        const completedGoals = goals.filter(g => g.done).length;
+        const totalNotes = notes.length;
+        const totalEvents = calendarEvents.length;
+        const totalReminders = reminders.length;
+
+        const xp = stats.xp || 0;
+        const level = stats.level || 1;
+        const needed = level * 100;
+        const xpPercent = Math.min(100, (xp / needed) * 100);
+        const focusHours = Math.floor((stats.total_focus_seconds || 0) / 3600);
+        const focusMins = Math.floor(((stats.total_focus_seconds || 0) % 3600) / 60);
+
+        // Build HTML
+        let html = `
+            <div style="display:grid; grid-template-columns: 1fr 2fr; gap:1.5rem; margin-bottom:2rem;">
+                <!-- XP Ring -->
+                <div style="background:var(--surface); border-radius:16px; border:1px solid var(--border); padding:1.5rem; text-align:center;">
+                    <div class="progress-ring" style="--pct: ${xpPercent};">
+                        <span class="ring-label">${xp} / ${needed}</span>
+                    </div>
+                    <div style="font-family:var(--font-display); font-size:1.8rem; font-weight:700; color:var(--primary);">Level ${level}</div>
+                    <div style="font-size:0.9rem; color:var(--text-secondary);">${xp} XP · ${needed - xp} XP to next level</div>
+                </div>
+
+                <!-- Stats Summary -->
+                <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:0.8rem;">
+                    <div class="progress-stat-card">
+                        <div class="stat-icon">⏱️</div>
+                        <div class="stat-number">${focusHours}h ${focusMins}m</div>
+                        <div class="stat-label">Total Study Time</div>
+                    </div>
+                    <div class="progress-stat-card">
+                        <div class="stat-icon">🏆</div>
+                        <div class="stat-number">${stats.total_sessions || 0}</div>
+                        <div class="stat-label">Sessions</div>
+                    </div>
+                    <div class="progress-stat-card">
+                        <div class="stat-icon">🔥</div>
+                        <div class="stat-number">${stats.streak || 0}</div>
+                        <div class="stat-label">Day Streak</div>
+                    </div>
+                    <div class="progress-stat-card">
+                        <div class="stat-icon">📚</div>
+                        <div class="stat-number">${totalSubjects}</div>
+                        <div class="stat-label">Subjects</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Second Row: More Stats -->
+            <div class="progress-stats-grid">
+                <div class="progress-stat-card">
+                    <div class="stat-icon">📋</div>
+                    <div class="stat-number">${completedAssignments}/${totalAssignments}</div>
+                    <div class="stat-label">Assignments Done</div>
+                </div>
+                <div class="progress-stat-card">
+                    <div class="stat-icon">🎯</div>
+                    <div class="stat-number">${completedGoals}/${totalGoals}</div>
+                    <div class="stat-label">Goals Completed</div>
+                </div>
+                <div class="progress-stat-card">
+                    <div class="stat-icon">📝</div>
+                    <div class="stat-number">${totalNotes}</div>
+                    <div class="stat-label">Notes</div>
+                </div>
+                <div class="progress-stat-card">
+                    <div class="stat-icon">📅</div>
+                    <div class="stat-number">${totalEvents}</div>
+                    <div class="stat-label">Calendar Events</div>
+                </div>
+                <div class="progress-stat-card">
+                    <div class="stat-icon">⏰</div>
+                    <div class="stat-number">${totalReminders}</div>
+                    <div class="stat-label">Reminders</div>
+                </div>
+                <div class="progress-stat-card">
+                    <div class="stat-icon">🏅</div>
+                    <div class="stat-number">${badges.length}</div>
+                    <div class="stat-label">Badges Earned</div>
+                </div>
+            </div>
+        `;
+
+        // Badges
+        if (badges.length > 0) {
+            html += `
+                <div style="margin-top:2rem;">
+                    <h3 style="font-family:var(--font-display); margin-bottom:0.8rem;"><i data-lucide="trophy"></i> Badges</h3>
+                    <div style="display:flex; gap:0.8rem; flex-wrap:wrap;">
+                        ${badges.map(b => `
+                            <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:0.6rem 1rem; display:flex; align-items:center; gap:0.5rem;">
+                                <span style="font-size:1.4rem;">${b.icon}</span>
+                                <span style="font-weight:600;">${b.name}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Recent Activity (latest 10)
+        try {
+            const actRes = await fetch(`${API_BASE}/api/activities?userId=${user.id}&limit=10`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (actRes.ok) {
+                const actData = await actRes.json();
+                if (actData.activities && actData.activities.length > 0) {
+                    html += `
+                        <div style="margin-top:2rem;">
+                            <h3 style="font-family:var(--font-display); margin-bottom:0.8rem;"><i data-lucide="activity"></i> Recent Activity</h3>
+                            <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:1rem;">
+                                ${actData.activities.slice(0, 10).map(a => `
+                                    <div style="display:flex; justify-content:space-between; padding:0.5rem 0; border-bottom:1px solid var(--border-light);">
+                                        <span>${escapeHtml(a.message)}</span>
+                                        <span style="color:var(--text-tertiary); font-size:0.8rem;">${timeAgo(a.created_at)}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+        } catch (e) { /* ignore */ }
+
+        container.innerHTML = html;
+        refreshIcons();
+
+    } catch (err) {
+        console.error('Load progress error:', err);
+        container.innerHTML = '<p style="color:var(--danger);">Failed to load progress data.</p>';
+    }
+}
+
 function renderNoteList() {
     const container = document.getElementById('notesListContainer');
     if (!container) return;
@@ -2645,190 +2817,6 @@ function initAssignments() {
 }
 
 // ===================================================================
-//  PROGRESS – CHARTS (NEW)
-// ===================================================================
-let xpChart = null;
-let studyChart = null;
-let tasksChart = null;
-let comparisonChart = null;
-
-async function loadProgress() {
-    if (!isLoggedIn) {
-        showNotification('Please log in to see your progress.', true);
-        return;
-    }
-
-    try {
-        const dailyRes = await fetch(`${API_BASE}/api/progress/daily?userId=${user.id}`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        if (!dailyRes.ok) throw new Error('Failed to fetch daily data');
-        const dailyData = await dailyRes.json();
-
-        const compRes = await fetch(`${API_BASE}/api/progress/comparison?userId=${user.id}`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        if (!compRes.ok) throw new Error('Failed to fetch comparison');
-        const compData = await compRes.json();
-
-        // Update stats cards
-        const totalXp = dailyData.reduce((sum, d) => sum + d.xp, 0);
-        const totalStudySecs = dailyData.reduce((sum, d) => sum + d.studySeconds, 0);
-        const totalTasks = dailyData.reduce((sum, d) => sum + d.assignmentsCompleted + d.goalsCompleted, 0);
-
-        const xpEl = document.getElementById('progressTotalXp');
-        const hoursEl = document.getElementById('progressTotalHours');
-        const tasksEl = document.getElementById('progressTasksDone');
-        const streakEl = document.getElementById('progressStreak');
-
-        if (xpEl) xpEl.textContent = totalXp;
-        if (hoursEl) hoursEl.textContent = Math.round(totalStudySecs / 3600) + 'h';
-        if (tasksEl) tasksEl.textContent = totalTasks;
-        if (streakEl) streakEl.textContent = streak + ' days';
-
-        // Render charts
-        renderProgressCharts(dailyData, compData);
-    } catch (err) {
-        console.error('Load progress error:', err);
-        showNotification('Failed to load progress data.', true);
-    }
-}
-
-function renderProgressCharts(dailyData, compData) {
-    if (typeof Chart === 'undefined') {
-        console.warn('Chart.js is not loaded. Progress charts will not render.');
-        return;
-    }
-
-    const labels = dailyData.map(d => {
-        const date = new Date(d.date);
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    });
-
-    const xpData = dailyData.map(d => d.xp);
-    const studyMins = dailyData.map(d => Math.round(d.studySeconds / 60));
-    const tasksData = dailyData.map(d => d.assignmentsCompleted + d.goalsCompleted);
-
-    // 1. XP Chart (Line)
-    const xpCanvas = document.getElementById('xpChart');
-    if (xpCanvas) {
-        if (xpChart) xpChart.destroy();
-        xpChart = new Chart(xpCanvas, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'XP Earned',
-                    data: xpData,
-                    borderColor: '#4f46e5',
-                    backgroundColor: 'rgba(79, 70, 229, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: { legend: { display: false } },
-                scales: { y: { beginAtZero: true } }
-            }
-        });
-    }
-
-    // 2. Study Time Chart (Bar)
-    const studyCanvas = document.getElementById('studyChart');
-    if (studyCanvas) {
-        if (studyChart) studyChart.destroy();
-        studyChart = new Chart(studyCanvas, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Minutes',
-                    data: studyMins,
-                    backgroundColor: 'rgba(99, 102, 241, 0.6)',
-                    borderColor: '#6366f1',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: { legend: { display: false } },
-                scales: { y: { beginAtZero: true } }
-            }
-        });
-    }
-
-    // 3. Tasks Completed (Line)
-    const tasksCanvas = document.getElementById('tasksChart');
-    if (tasksCanvas) {
-        if (tasksChart) tasksChart.destroy();
-        tasksChart = new Chart(tasksCanvas, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Tasks Done',
-                    data: tasksData,
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: { legend: { display: false } },
-                scales: { y: { beginAtZero: true } }
-            }
-        });
-    }
-
-    // 4. Comparison Chart (Bar)
-    const compCanvas = document.getElementById('comparisonChart');
-    if (compCanvas) {
-        if (comparisonChart) comparisonChart.destroy();
-        const current = compData.currentMonth;
-        const previous = compData.previousMonth;
-
-        comparisonChart = new Chart(compCanvas, {
-            type: 'bar',
-            data: {
-                labels: ['XP', 'Study (min)', 'Tasks'],
-                datasets: [
-                    {
-                        label: current.label,
-                        data: [
-                            current.xp,
-                            Math.round(current.studySeconds / 60),
-                            current.assignments + current.goals
-                        ],
-                        backgroundColor: 'rgba(79, 70, 229, 0.7)',
-                        borderColor: '#4f46e5',
-                        borderWidth: 2
-                    },
-                    {
-                        label: previous.label,
-                        data: [
-                            previous.xp,
-                            Math.round(previous.studySeconds / 60),
-                            previous.assignments + previous.goals
-                        ],
-                        backgroundColor: 'rgba(148, 163, 184, 0.7)',
-                        borderColor: '#94a3b8',
-                        borderWidth: 2
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                plugins: { legend: { position: 'top' } },
-                scales: { y: { beginAtZero: true } }
-            }
-        });
-    }
-}
-
-// ===================================================================
 //  GLOBAL VARIABLES (declared before DOMContentLoaded)
 // ===================================================================
 let pomodoroInterval = null;
@@ -2867,6 +2855,28 @@ function parseDateKey(key) {
     return { year: y, month: m - 1, day: d };
 }
 
+
+// Sidebar toggle on logo click
+document.querySelector('.logo a')?.addEventListener('click', function(e) {
+    e.preventDefault();
+    toggleSidebar();
+});
+
+// Show toggle button when sidebar is hidden (we'll add a button in HTML)
+// Actually, we'll create a floating toggle button dynamically.
+const toggleBtn = document.createElement('button');
+toggleBtn.className = 'sidebar-toggle-btn';
+toggleBtn.innerHTML = '<i data-lucide="menu"></i>';
+toggleBtn.setAttribute('aria-label', 'Toggle sidebar');
+document.body.appendChild(toggleBtn);
+toggleBtn.addEventListener('click', toggleSidebar);
+refreshIcons();
+
+// Load progress when navigating to progress page
+// The navigation already handles page switching, but we need to load progress data when the page becomes active.
+// We'll override the initNavigation to call loadProgress when pageId === 'progress-page'.
+
+
 // ===================================================================
 //  DOM CONTENT LOADED
 // ===================================================================
@@ -2893,17 +2903,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         await loadNotifications();
         await loadRecentActivities();
     } else {
-        const actEl = document.getElementById('activityTimeline');
-        if (actEl) {
-            actEl.innerHTML = DEMO_DATA.recentActivity.map(a => `
-                <div>
-                    ${a.type === 'assignment_completed' ? '✅' : a.type === 'subject_added' ? '📚' : '🧘'} ${escapeHtml(a.message)}
-                    <span class="activity-time">${timeAgo(a.created_at)}</span>
-                </div>
-            `).join('');
-        }
-        const notifEl = document.getElementById('notificationList');
-        if (notifEl) notifEl.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">Login to see notifications.</p>';
+        document.getElementById('activityTimeline').innerHTML = DEMO_DATA.recentActivity.map(a => `
+            <div>
+                ${a.type === 'assignment_completed' ? '✅' : a.type === 'subject_added' ? '📚' : '🧘'} ${escapeHtml(a.message)}
+                <span class="activity-time">${timeAgo(a.created_at)}</span>
+            </div>
+        `).join('');
+        document.getElementById('notificationList').innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">Login to see notifications.</p>';
     }
 
     // Init modules
@@ -2928,8 +2934,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (isLoggedIn) {
         await loadNotes();
     } else {
-        const notesContainer = document.getElementById('notesListContainer');
-        if (notesContainer) notesContainer.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">Login to manage notes.</p>';
+        document.getElementById('notesListContainer').innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">Login to manage notes.</p>';
     }
 
     // Notes event listeners
@@ -2950,8 +2955,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (noteSaveTimeout) clearTimeout(noteSaveTimeout);
         setNoteStatus('Unsaved changes...');
         noteSaveTimeout = setTimeout(() => {
-            const title = noteTitleInput?.value.trim() || '';
-            const content = noteContentInput?.value.trim() || '';
+            const title = noteTitleInput.value.trim();
+            const content = noteContentInput.value.trim();
             if (title || content) {
                 saveCurrentNote();
             } else {
@@ -2975,12 +2980,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ---- Note Preview Button ----
     document.getElementById('previewNoteBtn')?.addEventListener('click', () => {
-        const content = noteContentInput?.value || '';
-        const title = noteTitleInput?.value || 'Untitled';
+        const content = document.getElementById('noteContent')?.value || '';
+        const title = document.getElementById('noteTitle').value || 'Untitled';
         if (!content && !title) {
             showNotification('Nothing to preview.', true);
             return;
         }
+        // Convert HTML content to plain text preview? For Quill we can just show the HTML.
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
         overlay.innerHTML = `
@@ -3213,8 +3219,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             Notification.requestPermission();
         }
     } else {
-        const remEl = document.getElementById('remindersList');
-        if (remEl) remEl.innerHTML = `<div class="empty-state"><i data-lucide="bell"></i><p>Login to manage reminders.</p></div>`;
+        document.getElementById('remindersList').innerHTML = `<div class="empty-state"><i data-lucide="bell"></i><p>Login to manage reminders.</p></div>`;
         refreshIcons();
     }
 
