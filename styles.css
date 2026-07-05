@@ -1688,3 +1688,53 @@ body.dark .hamburger:hover {
     overflow-y: auto;
     padding-right: 4px;
 }
+
+/* ---- Timed Tasks - Bigger & More Prominent ---- */
+.steady-timed-tasks {
+    padding: 2rem !important;
+    margin-top: 2.5rem;
+    background: var(--surface-elevated);
+}
+
+.steady-timed-tasks h3 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 1.2rem;
+}
+
+.steady-timed-tasks .timed-task-item {
+    padding: 1.2rem 1.5rem !important;
+    font-size: 1rem;
+    border-radius: 16px;
+    border-left-width: 6px !important;
+    background: var(--bg) !important;
+}
+
+.steady-timed-tasks .timed-task-item .task-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+}
+
+.steady-timed-tasks .timed-task-item .task-time {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.steady-timed-tasks .timed-task-item .timer-display-xxx {  /* dynamic class, we'll target via attribute */
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--primary);
+    font-family: 'Courier New', monospace;
+}
+
+.steady-timed-tasks .timed-task-item .btn {
+    font-size: 0.9rem;
+    padding: 0.4rem 1rem;
+}
+
+/* Make the whole task container wider */
+.steady-timed-tasks {
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
