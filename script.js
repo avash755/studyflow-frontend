@@ -1567,58 +1567,80 @@ function initSchedule() {
     const addBtn = document.getElementById('addClassBtn');
     const resetBtn = document.getElementById('resetScheduleBtn');
 
+    // ---------- ADD EVENT ----------
     if (addBtn) {
         addBtn.addEventListener('click', () => {
             if (!requireLogin()) return;
-
+        
+            // Get today's day to pre‑select in the dropdown
+            const today = new Date().getDay(); // 0=Sunday, 6=Saturday
+        
             openModal('Add Event to Planner', `
                 <div class="form-group">
                     <label for="eventTitle">Activity Title</label>
                     <input type="text" id="eventTitle" placeholder="e.g., Study, Gym, Meeting" required>
                 </div>
-                <div class="form-group">
-                    <label for="eventDay">Day</label>
-                    <select id="eventDay">
-                        <option value="0">Sunday</option>
-                        <option value="1">Monday</option>
-                        <option value="2">Tuesday</option>
-                        <option value="3">Wednesday</option>
-                        <option value="4">Thursday</option>
-                        <option value="5">Friday</option>
-                        <option value="6">Saturday</option>
-                    </select>
+            
+                <!-- Row: Day + Repeat checkbox -->
+                <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+                    <div class="form-group" style="flex:1; min-width:120px;">
+                        <label for="eventDay">Day</label>
+                        <select id="eventDay">
+                            <option value="0" ${today === 0 ? 'selected' : ''}>Sunday</option>
+                            <option value="1" ${today === 1 ? 'selected' : ''}>Monday</option>
+                            <option value="2" ${today === 2 ? 'selected' : ''}>Tuesday</option>
+                            <option value="3" ${today === 3 ? 'selected' : ''}>Wednesday</option>
+                            <option value="4" ${today === 4 ? 'selected' : ''}>Thursday</option>
+                            <option value="5" ${today === 5 ? 'selected' : ''}>Friday</option>
+                            <option value="6" ${today === 6 ? 'selected' : ''}>Saturday</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="display:flex; align-items:center; gap:0.4rem; margin-top:0.4rem;">
+                        <input type="checkbox" id="eventDaily" style="width:18px; height:18px;">
+                        <label for="eventDaily" style="margin:0; font-size:0.9rem; cursor:pointer;">Repeat every day</label>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="eventStart">Start Time</label>
-                    <input type="time" id="eventStart" value="09:00" required>
+            
+                <!-- Row: Start Time + End Time -->
+                <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+                    <div class="form-group" style="flex:1; min-width:120px;">
+                        <label for="eventStart">Start Time</label>
+                        <input type="time" id="eventStart" value="09:00" required>
+                    </div>
+                    <div class="form-group" style="flex:1; min-width:120px;">
+                        <label for="eventEnd">End Time</label>
+                        <input type="time" id="eventEnd" value="10:00" required>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="eventEnd">End Time</label>
-                    <input type="time" id="eventEnd" value="10:00" required>
-                </div>
+            
                 <div class="form-group">
                     <label for="eventLocation">Location (optional)</label>
                     <input type="text" id="eventLocation" placeholder="e.g., Room 101, Library">
                 </div>
+            
                 <div class="form-group">
                     <label for="eventDescription">Description (optional)</label>
                     <textarea id="eventDescription" rows="2" placeholder="Add notes..."></textarea>
                 </div>
-                <div class="form-group" style="display:flex; align-items:center; gap:0.5rem;">
-                    <input type="checkbox" id="eventDaily" style="width:18px; height:18px;">
-                    <label for="eventDaily" style="margin:0;">Repeat every day</label>
-                </div>
-                <div class="form-group">
-                    <label for="eventColor">Color</label>
-                    <select id="eventColor">
-                        <option value="color-red">Red (Important)</option>
-                        <option value="color-blue">Blue</option>
-                        <option value="color-green">Green</option>
-                        <option value="color-yellow">Yellow</option>
-                        <option value="color-purple">Purple</option>
-                        <option value="color-gray">Gray</option>
-                        <option value="color-default">Indigo (Default)</option>
-                    </select>
+            
+                <!-- Row: Color + Timer checkbox -->
+                <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+                    <div class="form-group" style="flex:1; min-width:140px;">
+                        <label for="eventColor">Color</label>
+                        <select id="eventColor">
+                            <option value="color-red">Red (Important)</option>
+                            <option value="color-blue">Blue</option>
+                            <option value="color-green">Green</option>
+                            <option value="color-yellow">Yellow</option>
+                            <option value="color-purple">Purple</option>
+                            <option value="color-gray">Gray</option>
+                            <option value="color-default">Indigo (Default)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="display:flex; align-items:center; gap:0.4rem; margin-top:0.4rem;">
+                        <input type="checkbox" id="eventHasTimer" style="width:18px; height:18px;">
+                        <label for="eventHasTimer" style="margin:0; font-size:0.9rem; cursor:pointer;">⏱️ Add Timer</label>
+                    </div>
                 </div>
             `, async (overlay) => {
                 const title = overlay.querySelector('#eventTitle').value.trim();
@@ -1629,11 +1651,12 @@ function initSchedule() {
                 const description = overlay.querySelector('#eventDescription').value.trim();
                 const colorClass = overlay.querySelector('#eventColor').value;
                 const daily = overlay.querySelector('#eventDaily').checked;
-
+                const hasTimer = overlay.querySelector('#eventHasTimer').checked;
+            
                 if (!title) { showNotification('Please enter a title', true); return false; }
                 if (!startTime || !endTime) { showNotification('Please set start and end times', true); return false; }
                 if (startTime >= endTime) { showNotification('End time must be after start time', true); return false; }
-
+            
                 try {
                     const daysToPost = daily ? [0,1,2,3,4,5,6] : [day];
                     for (const d of daysToPost) {
@@ -1651,7 +1674,8 @@ function initSchedule() {
                                 endTime,
                                 location,
                                 colorClass,
-                                description
+                                description,
+                                hasTimer // <-- new field
                             })
                         });
                         if (!response.ok) {
@@ -1662,6 +1686,10 @@ function initSchedule() {
                     }
                     await loadSchedule();
                     await renderSchedule();
+                    // If Steady Mode is active, reload timed tasks
+                    if (document.getElementById('steady-page').classList.contains('active')) {
+                        loadTimedTasks();
+                    }
                     showNotification('✅ Event(s) added!');
                     return true;
                 } catch (err) {

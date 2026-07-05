@@ -1682,3 +1682,9 @@ body.dark .hamburger:hover {
         grid-template-columns: repeat(2, 1fr);
     }
 }
+
+.modal-body {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 4px;
+}
