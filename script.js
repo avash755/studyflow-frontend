@@ -1582,31 +1582,46 @@ function initSchedule() {
     if (addBtn) {
         addBtn.addEventListener('click', () => {
             if (!requireLogin()) return;
-            const today = new Date().getDay();
+
+            // Helper to generate day toggle buttons
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const dayFull = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            let dayButtonsHtml = dayNames.map((name, index) => `
+                <button type="button" class="day-toggle-btn" data-day="${index}" style="
+                    flex:1; 
+                    padding:0.5rem 0.2rem; 
+                    border:2px solid var(--border); 
+                    border-radius:8px; 
+                    background:var(--surface); 
+                    color:var(--text-secondary); 
+                    cursor:pointer; 
+                    font-weight:600; 
+                    font-size:0.8rem; 
+                    transition:all 0.2s var(--ease-spring);
+                    min-width:40px;
+                    text-align:center;
+                ">${name}</button>
+            `).join('');
 
             openModal('Add Event to Planner', `
                 <div class="form-group">
                     <label for="eventTitle">Activity Title</label>
                     <input type="text" id="eventTitle" placeholder="e.g., Study, Gym, Meeting" required>
                 </div>
-                <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
-                    <div class="form-group" style="flex:1; min-width:120px;">
-                        <label for="eventDay">Day</label>
-                        <select id="eventDay">
-                            <option value="0" ${today === 0 ? 'selected' : ''}>Sunday</option>
-                            <option value="1" ${today === 1 ? 'selected' : ''}>Monday</option>
-                            <option value="2" ${today === 2 ? 'selected' : ''}>Tuesday</option>
-                            <option value="3" ${today === 3 ? 'selected' : ''}>Wednesday</option>
-                            <option value="4" ${today === 4 ? 'selected' : ''}>Thursday</option>
-                            <option value="5" ${today === 5 ? 'selected' : ''}>Friday</option>
-                            <option value="6" ${today === 6 ? 'selected' : ''}>Saturday</option>
-                        </select>
+
+                <!-- Day selector: toggle buttons -->
+                <div class="form-group" style="margin-bottom:1rem;">
+                    <label style="display:block; margin-bottom:0.3rem;">Select Days</label>
+                    <div style="display:flex; gap:0.3rem; flex-wrap:wrap;">
+                        ${dayButtonsHtml}
                     </div>
-                    <div class="form-group" style="display:flex; align-items:center; gap:0.4rem; margin-top:0.4rem;">
-                        <input type="checkbox" id="eventDaily" style="width:18px; height:18px;">
-                        <label for="eventDaily" style="margin:0; font-size:0.9rem; cursor:pointer;">Repeat every day</label>
+                    <div style="margin-top:0.5rem; display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
+                        <button type="button" id="selectAllDaysBtn" class="btn btn-secondary btn-sm">Select All</button>
+                        <button type="button" id="clearAllDaysBtn" class="btn btn-secondary btn-sm">Clear All</button>
+                        <span style="font-size:0.8rem; color:var(--text-tertiary);">Click a day to toggle</span>
                     </div>
                 </div>
+
                 <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
                     <div class="form-group" style="flex:1; min-width:120px;">
                         <label for="eventStart">Start Time</label>
@@ -1617,14 +1632,17 @@ function initSchedule() {
                         <input type="time" id="eventEnd" value="10:00" required>
                     </div>
                 </div>
+
                 <div class="form-group">
                     <label for="eventLocation">Location (optional)</label>
                     <input type="text" id="eventLocation" placeholder="e.g., Room 101, Library">
                 </div>
+
                 <div class="form-group">
                     <label for="eventDescription">Description (optional)</label>
                     <textarea id="eventDescription" rows="2" placeholder="Add notes..."></textarea>
                 </div>
+
                 <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
                     <div class="form-group" style="flex:1; min-width:140px;">
                         <label for="eventColor">Color</label>
@@ -1645,22 +1663,30 @@ function initSchedule() {
                 </div>
             `, async (overlay) => {
                 const title = overlay.querySelector('#eventTitle').value.trim();
-                const day = parseInt(overlay.querySelector('#eventDay').value);
                 const startTime = overlay.querySelector('#eventStart').value;
                 const endTime = overlay.querySelector('#eventEnd').value;
                 const location = overlay.querySelector('#eventLocation').value.trim();
                 const description = overlay.querySelector('#eventDescription').value.trim();
                 const colorClass = overlay.querySelector('#eventColor').value;
-                const daily = overlay.querySelector('#eventDaily').checked;
                 const hasTimer = overlay.querySelector('#eventHasTimer').checked;
+
+                // Get selected days from toggled buttons
+                const dayButtons = overlay.querySelectorAll('.day-toggle-btn');
+                const selectedDays = [];
+                dayButtons.forEach(btn => {
+                    if (btn.classList.contains('active')) {
+                        selectedDays.push(parseInt(btn.dataset.day));
+                    }
+                });
 
                 if (!title) { showNotification('Please enter a title', true); return false; }
                 if (!startTime || !endTime) { showNotification('Please set start and end times', true); return false; }
                 if (startTime >= endTime) { showNotification('End time must be after start time', true); return false; }
+                if (selectedDays.length === 0) { showNotification('Please select at least one day.', true); return false; }
 
                 try {
-                    const daysToPost = daily ? [0,1,2,3,4,5,6] : [day];
-                    for (const d of daysToPost) {
+                    // Post to each selected day
+                    for (const d of selectedDays) {
                         const response = await fetch(`${API_BASE}/api/schedule`, {
                             method: 'POST',
                             headers: {
@@ -1690,7 +1716,7 @@ function initSchedule() {
                     if (document.getElementById('steady-page').classList.contains('active')) {
                         loadTimedTasks();
                     }
-                    showNotification('✅ Event(s) added!');
+                    showNotification(`✅ Event(s) added to ${selectedDays.length} day(s)!`);
                     return true;
                 } catch (err) {
                     console.error('Add event error:', err);
@@ -1698,6 +1724,53 @@ function initSchedule() {
                     return false;
                 }
             });
+
+            // ---- After modal is rendered, attach day button events ----
+            setTimeout(() => {
+                const overlay = document.querySelector('.modal-overlay');
+                if (!overlay) return;
+                const dayBtns = overlay.querySelectorAll('.day-toggle-btn');
+                const selectAllBtn = overlay.querySelector('#selectAllDaysBtn');
+                const clearAllBtn = overlay.querySelector('#clearAllDaysBtn');
+
+                // Toggle individual day
+                dayBtns.forEach(btn => {
+                    btn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        this.classList.toggle('active');
+                        // Update style
+                        if (this.classList.contains('active')) {
+                            this.style.background = 'var(--primary)';
+                            this.style.color = 'white';
+                            this.style.borderColor = 'var(--primary)';
+                        } else {
+                            this.style.background = 'var(--surface)';
+                            this.style.color = 'var(--text-secondary)';
+                            this.style.borderColor = 'var(--border)';
+                        }
+                    });
+                });
+
+                // Select All
+                selectAllBtn?.addEventListener('click', function() {
+                    dayBtns.forEach(btn => {
+                        btn.classList.add('active');
+                        btn.style.background = 'var(--primary)';
+                        btn.style.color = 'white';
+                        btn.style.borderColor = 'var(--primary)';
+                    });
+                });
+
+                // Clear All
+                clearAllBtn?.addEventListener('click', function() {
+                    dayBtns.forEach(btn => {
+                        btn.classList.remove('active');
+                        btn.style.background = 'var(--surface)';
+                        btn.style.color = 'var(--text-secondary)';
+                        btn.style.borderColor = 'var(--border)';
+                    });
+                });
+            }, 100); // small delay to ensure modal is in DOM
         });
     }
 

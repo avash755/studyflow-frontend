@@ -1738,3 +1738,20 @@ body.dark .hamburger:hover {
     margin-left: 0 !important;
     margin-right: 0 !important;
 }
+
+/* Day toggle buttons in modal */
+.day-toggle-btn {
+    transition: all 0.2s var(--ease-spring);
+    user-select: none;
+    font-family: var(--font-body);
+}
+.day-toggle-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}
+.day-toggle-btn.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+    box-shadow: 0 4px 12px var(--primary-glow);
+}
