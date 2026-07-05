@@ -1,427 +1,3 @@
-let activeTimer = null; // { taskId, startTime, elapsedBeforePause, paused }
-let timerInterval = null;
-
-
-async function loadTimedTasks() {
-    const container = document.getElementById('timedTasksContainer');
-    if (!container) return;
-    if (!isLoggedIn) {
-        container.innerHTML = '<p style="color:var(--text-tertiary);">Login to see tasks.</p>';
-        return;
-    }
-    try {
-        // Fetch today's schedule items with has_timer = true
-        const response = await fetch(`${API_BASE}/api/schedule?userId=${user.id}`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        if (!response.ok) throw new Error('Failed to fetch schedule');
-        const allEvents = await response.json();
-        const today = new Date().toISOString().split('T')[0];
-        const todayDay = new Date().getDay(); // 0=Sunday
-        const timedTasks = allEvents.filter(e => e.has_timer && e.day === todayDay);
-
-        if (timedTasks.length === 0) {
-            container.innerHTML = '<p style="color:var(--text-tertiary);">No timed tasks for today.</p>';
-            return;
-        }
-
-        // Determine if already completed today
-        const todayStr = today;
-        let html = '<div style="display:flex; flex-direction:column; gap:0.75rem;">';
-        for (const task of timedTasks) {
-            const isCompleted = task.last_completed_date === todayStr;
-            const statusText = isCompleted ? '✅ Completed' : '⏳ Not started';
-            const statusClass = isCompleted ? 'color:var(--success);' : 'color:var(--text-secondary);';
-            // Find if this task is currently active (running or paused)
-            const isActive = activeTimer && activeTimer.taskId === task.id;
-            const isRunning = isActive && !activeTimer.paused;
-            const isPaused = isActive && activeTimer.paused;
-
-            let actionButtons = '';
-            if (isCompleted) {
-                actionButtons = `<span style="font-weight:600; color:var(--success);">Done for today</span>`;
-            } else {
-                if (isRunning) {
-                    actionButtons = `
-                        <button class="btn btn-secondary btn-sm timer-pause" data-id="${task.id}">⏸ Pause</button>
-                        <button class="btn btn-primary btn-sm timer-finish" data-id="${task.id}">✅ Finish</button>
-                    `;
-                } else if (isPaused) {
-                    actionButtons = `
-                        <button class="btn btn-secondary btn-sm timer-resume" data-id="${task.id}">▶️ Resume</button>
-                        <button class="btn btn-primary btn-sm timer-finish" data-id="${task.id}">✅ Finish</button>
-                    `;
-                } else {
-                    actionButtons = `
-                        <button class="btn btn-primary btn-sm timer-start" data-id="${task.id}">▶ Start</button>
-                    `;
-                }
-            }
-
-            html += `
-                <div class="timed-task-item" data-id="${task.id}" style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 1rem; background:var(--border-light); border-radius:12px; border-left:4px solid var(--primary);">
-                    <div>
-                        <div style="font-weight:600;">${escapeHtml(task.subject)}</div>
-                        <div style="font-size:0.8rem; color:var(--text-secondary);">${task.start_time} – ${task.end_time} ${task.location ? '· ' + escapeHtml(task.location) : ''}</div>
-                        ${isActive ? `<div style="font-size:0.8rem; color:var(--primary); font-weight:600;" class="timer-display-${task.id}">⏱️ ${formatTime(elapsedSeconds(task))}</div>` : ''}
-                        ${!isCompleted ? `<div style="font-size:0.75rem; ${statusClass}">${statusText}</div>` : `<div style="font-size:0.75rem; color:var(--success);">✅ Completed (${task.last_duration_seconds ? Math.floor(task.last_duration_seconds/60)+'m' : ''})</div>`}
-                    </div>
-                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
-                        ${actionButtons}
-                    </div>
-                </div>
-            `;
-        }
-        html += '</div>';
-        container.innerHTML = html;
-
-        // Attach event listeners
-        container.querySelectorAll('.timer-start').forEach(btn => {
-            btn.addEventListener('click', () => startTimedTask(parseInt(btn.dataset.id)));
-        });
-        container.querySelectorAll('.timer-pause').forEach(btn => {
-            btn.addEventListener('click', () => pauseTimedTask(parseInt(btn.dataset.id)));
-        });
-        container.querySelectorAll('.timer-resume').forEach(btn => {
-            btn.addEventListener('click', () => resumeTimedTask(parseInt(btn.dataset.id)));
-        });
-        container.querySelectorAll('.timer-finish').forEach(btn => {
-            btn.addEventListener('click', () => finishTimedTask(parseInt(btn.dataset.id)));
-        });
-        refreshIcons();
-    } catch (err) {
-        console.error('Load timed tasks error:', err);
-        container.innerHTML = '<p style="color:var(--danger);">Failed to load tasks.</p>';
-    }
-}
-
-function elapsedSeconds(taskId) {
-    if (!activeTimer || activeTimer.taskId !== taskId) return 0;
-    const now = Date.now();
-    let elapsed = activeTimer.elapsedBeforePause || 0;
-    if (!activeTimer.paused) {
-        elapsed += (now - activeTimer.startTime) / 1000;
-    }
-    return Math.floor(elapsed);
-}
-
-function formatTime(seconds) {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-}
-
-async function loadTimedTasks() {
-    const container = document.getElementById('timedTasksContainer');
-    if (!container) return;
-    if (!isLoggedIn) {
-        container.innerHTML = '<p style="color:var(--text-tertiary);">Login to see tasks.</p>';
-        return;
-    }
-    try {
-        const response = await fetch(`${API_BASE}/api/schedule?userId=${user.id}`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        if (!response.ok) throw new Error('Failed to fetch schedule');
-        const allEvents = await response.json();
-        const todayDay = new Date().getDay();
-        const timedTasks = allEvents.filter(e => e.has_timer && e.day === todayDay);
-
-        if (timedTasks.length === 0) {
-            container.innerHTML = '<p style="color:var(--text-tertiary);">No timed tasks for today.</p>';
-            return;
-        }
-
-        const todayStr = new Date().toISOString().split('T')[0];
-        let html = '<div style="display:flex; flex-direction:column; gap:0.75rem;">';
-        for (const task of timedTasks) {
-            const isCompleted = task.last_completed_date === todayStr;
-            const isActive = activeTimer && activeTimer.taskId === task.id;
-            const isRunning = isActive && !activeTimer.paused;
-            const isPaused = isActive && activeTimer.paused;
-
-            let actionButtons = '';
-            if (isCompleted) {
-                actionButtons = `<span style="font-weight:600; color:var(--success);">✅ Done for today</span>`;
-            } else {
-                if (isRunning) {
-                    actionButtons = `
-                        <button class="btn btn-secondary btn-sm timer-pause" data-id="${task.id}">⏸ Pause</button>
-                        <button class="btn btn-primary btn-sm timer-finish" data-id="${task.id}">✅ Finish</button>
-                    `;
-                } else if (isPaused) {
-                    actionButtons = `
-                        <button class="btn btn-secondary btn-sm timer-resume" data-id="${task.id}">▶️ Resume</button>
-                        <button class="btn btn-primary btn-sm timer-finish" data-id="${task.id}">✅ Finish</button>
-                    `;
-                } else {
-                    actionButtons = `
-                        <button class="btn btn-primary btn-sm timer-start" data-id="${task.id}">▶ Start</button>
-                    `;
-                }
-            }
-
-            const elapsed = isActive ? elapsedSeconds(task.id) : 0;
-
-            html += `
-                <div class="timed-task-item" data-id="${task.id}" style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 1rem; background:var(--border-light); border-radius:12px; border-left:4px solid var(--primary);">
-                    <div>
-                        <div style="font-weight:600;">${escapeHtml(task.subject)}</div>
-                        <div style="font-size:0.8rem; color:var(--text-secondary);">${task.start_time} – ${task.end_time} ${task.location ? '· ' + escapeHtml(task.location) : ''}</div>
-                        ${isActive ? `<div style="font-size:0.8rem; color:var(--primary); font-weight:600;" class="timer-display-${task.id}">⏱️ ${formatTime(elapsed)}</div>` : ''}
-                        ${!isCompleted ? `<div style="font-size:0.75rem; color:var(--text-secondary);">${isActive ? '⏳ In progress' : '⏳ Not started'}</div>` : `<div style="font-size:0.75rem; color:var(--success);">✅ Completed (${task.last_duration_seconds ? Math.floor(task.last_duration_seconds/60)+'m' : ''})</div>`}
-                    </div>
-                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
-                        ${actionButtons}
-                    </div>
-                </div>
-            `;
-        }
-        html += '</div>';
-        container.innerHTML = html;
-
-        // Attach event listeners
-        container.querySelectorAll('.timer-start').forEach(btn => {
-            btn.addEventListener('click', () => startTimedTask(parseInt(btn.dataset.id)));
-        });
-        container.querySelectorAll('.timer-pause').forEach(btn => {
-            btn.addEventListener('click', () => pauseTimedTask(parseInt(btn.dataset.id)));
-        });
-        container.querySelectorAll('.timer-resume').forEach(btn => {
-            btn.addEventListener('click', () => resumeTimedTask(parseInt(btn.dataset.id)));
-        });
-        container.querySelectorAll('.timer-finish').forEach(btn => {
-            btn.addEventListener('click', () => finishTimedTask(parseInt(btn.dataset.id)));
-        });
-        refreshIcons();
-    } catch (err) {
-        console.error('Load timed tasks error:', err);
-        container.innerHTML = '<p style="color:var(--danger);">Failed to load tasks.</p>';
-    }
-}
-
-function startTimedTask(taskId) {
-    // If there's an active timer, pause it first
-    if (activeTimer && !activeTimer.paused) {
-        pauseTimedTask(activeTimer.taskId);
-    }
-    activeTimer = {
-        taskId,
-        startTime: Date.now(),
-        elapsedBeforePause: 0,
-        paused: false
-    };
-    if (timerInterval) clearInterval(timerInterval);
-    timerInterval = setInterval(() => {
-        const display = document.querySelector(`.timer-display-${taskId}`);
-        if (display) {
-            const secs = elapsedSeconds(taskId);
-            display.textContent = `⏱️ ${formatTime(secs)}`;
-        }
-    }, 500);
-    loadTimedTasks();
-}
-
-function pauseTimedTask(taskId) {
-    if (!activeTimer || activeTimer.taskId !== taskId) return;
-    if (activeTimer.paused) return;
-    const now = Date.now();
-    const elapsed = activeTimer.elapsedBeforePause || 0;
-    activeTimer.elapsedBeforePause = elapsed + (now - activeTimer.startTime) / 1000;
-    activeTimer.paused = true;
-    if (timerInterval) clearInterval(timerInterval);
-    timerInterval = null;
-    loadTimedTasks();
-}
-
-function resumeTimedTask(taskId) {
-    if (!activeTimer || activeTimer.taskId !== taskId || !activeTimer.paused) return;
-    activeTimer.startTime = Date.now();
-    activeTimer.paused = false;
-    if (timerInterval) clearInterval(timerInterval);
-    timerInterval = setInterval(() => {
-        const display = document.querySelector(`.timer-display-${taskId}`);
-        if (display) {
-            const secs = elapsedSeconds(taskId);
-            display.textContent = `⏱️ ${formatTime(secs)}`;
-        }
-    }, 500);
-    loadTimedTasks();
-}
-
-async function finishTimedTask(taskId) {
-    if (!activeTimer || activeTimer.taskId !== taskId) {
-        showNotification('No active timer for this task.', true);
-        return;
-    }
-    const duration = elapsedSeconds(taskId);
-    if (duration < 1) {
-        showNotification('Task duration too short (less than 1 second).', true);
-        return;
-    }
-    try {
-        // Mark as completed in backend
-        const response = await fetch(`${API_BASE}/api/schedule/${taskId}/complete`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify({ userId: user.id, durationSeconds: duration })
-        });
-        if (!response.ok) {
-            const data = await response.json();
-            showNotification(data.error || 'Failed to complete task', true);
-            return;
-        }
-        // Update stats (focus time, sessions, streak)
-        await fetch(`${API_BASE}/api/stats`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify({
-                userId: user.id,
-                sessionTime: duration,
-                sessionIncrement: true,
-                streakUpdate: true
-            })
-        });
-        // Refresh stats display
-        await loadStats();
-        updateSteadyStats();
-        // Clear active timer
-        if (timerInterval) clearInterval(timerInterval);
-        timerInterval = null;
-        activeTimer = null;
-        showNotification(`✅ Completed task in ${Math.floor(duration/60)} min!`);
-        loadTimedTasks();
-        updateStats();
-    } catch (err) {
-        console.error('Finish task error:', err);
-        showNotification('Could not connect to server.', true);
-    }
-}
-
-function formatTime(seconds) {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
-}
-
-function startTimedTask(taskId) {
-    // If there's an active timer, pause it first
-    if (activeTimer && !activeTimer.paused) {
-        pauseTimedTask(activeTimer.taskId);
-    }
-    // Start new timer
-    activeTimer = {
-        taskId,
-        startTime: Date.now(),
-        elapsedBeforePause: 0,
-        paused: false
-    };
-    // Clear previous interval and start new
-    if (timerInterval) clearInterval(timerInterval);
-    timerInterval = setInterval(() => {
-        // Update display for active task
-        const display = document.querySelector(`.timer-display-${taskId}`);
-        if (display) {
-            const secs = elapsedSeconds({ id: taskId });
-            display.textContent = `⏱️ ${formatTime(secs)}`;
-        }
-        // Also update any other running display (only one active anyway)
-    }, 500);
-    // Refresh the task list to show updated buttons
-    loadTimedTasks();
-}
-
-function pauseTimedTask(taskId) {
-    if (!activeTimer || activeTimer.taskId !== taskId) return;
-    if (activeTimer.paused) return;
-    // Calculate elapsed so far and store as base
-    const now = Date.now();
-    const elapsed = activeTimer.elapsedBeforePause || 0;
-    activeTimer.elapsedBeforePause = elapsed + (now - activeTimer.startTime) / 1000;
-    activeTimer.paused = true;
-    if (timerInterval) clearInterval(timerInterval);
-    timerInterval = null;
-    loadTimedTasks();
-}
-
-function resumeTimedTask(taskId) {
-    if (!activeTimer || activeTimer.taskId !== taskId || !activeTimer.paused) return;
-    activeTimer.startTime = Date.now();
-    activeTimer.paused = false;
-    if (timerInterval) clearInterval(timerInterval);
-    timerInterval = setInterval(() => {
-        const display = document.querySelector(`.timer-display-${taskId}`);
-        if (display) {
-            const secs = elapsedSeconds({ id: taskId });
-            display.textContent = `⏱️ ${formatTime(secs)}`;
-        }
-    }, 500);
-    loadTimedTasks();
-}
-
-async function finishTimedTask(taskId) {
-    if (!activeTimer || activeTimer.taskId !== taskId) {
-        showNotification('No active timer for this task.', true);
-        return;
-    }
-    const duration = elapsedSeconds({ id: taskId });
-    if (duration < 1) {
-        showNotification('Task duration too short (less than 1 second).', true);
-        return;
-    }
-    try {
-        // Mark as completed in backend
-        const response = await fetch(`${API_BASE}/api/schedule/${taskId}/complete`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify({ userId: user.id, durationSeconds: duration })
-        });
-        if (!response.ok) {
-            const data = await response.json();
-            showNotification(data.error || 'Failed to complete task', true);
-            return;
-        }
-        // Update stats (focus time, sessions, streak)
-        await fetch(`${API_BASE}/api/stats`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify({
-                userId: user.id,
-                sessionTime: duration,
-                sessionIncrement: true,
-                streakUpdate: true
-            })
-        });
-        // Refresh stats display
-        await loadStats();
-        updateSteadyStats();
-        // Clear active timer
-        if (timerInterval) clearInterval(timerInterval);
-        timerInterval = null;
-        activeTimer = null;
-        // Show success
-        showNotification(`✅ Completed "${task.subject}" in ${Math.floor(duration/60)} min!`);
-        // Reload timed tasks
-        loadTimedTasks();
-        // Update dashboard stats (if visible)
-        updateStats();
-    } catch (err) {
-        console.error('Finish task error:', err);
-        showNotification('Could not connect to server.', true);
-    }
-}
 // ===================================================================
 //  GLOBAL HELPERS
 // ===================================================================
@@ -433,10 +9,6 @@ function escapeHtml(str) {
         if (m === '>') return '&gt;';
         return m;
     });
-}
-
-function toggleSidebar() {
-    document.body.classList.toggle('sidebar-hidden');
 }
 
 function showNotification(msg, isError = false) {
@@ -524,7 +96,7 @@ const DEMO_DATA = {
 };
 
 // ===================================================================
-//  ALARM SYSTEM (for Pomodoro)
+//  ALARM SYSTEM (Pomodoro)
 // ===================================================================
 let alarmInterval = null;
 let alarmAudioCtx = null;
@@ -1515,7 +1087,7 @@ function initCalendar() {
 }
 
 // ===================================================================
-//  CLASS SCHEDULE (Weekly view with 7 days)
+//  SCHEDULE (Weekly Planner)
 // ===================================================================
 async function loadSchedule() {
     if (!isLoggedIn) {
@@ -1766,20 +1338,19 @@ function initSchedule() {
     const addBtn = document.getElementById('addClassBtn');
     const resetBtn = document.getElementById('resetScheduleBtn');
 
-    // ---------- ADD EVENT ----------
     if (addBtn) {
         addBtn.addEventListener('click', () => {
             if (!requireLogin()) return;
-        
+
             // Get today's day to pre‑select in the dropdown
             const today = new Date().getDay(); // 0=Sunday, 6=Saturday
-        
+
             openModal('Add Event to Planner', `
                 <div class="form-group">
                     <label for="eventTitle">Activity Title</label>
                     <input type="text" id="eventTitle" placeholder="e.g., Study, Gym, Meeting" required>
                 </div>
-            
+
                 <!-- Row: Day + Repeat checkbox -->
                 <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
                     <div class="form-group" style="flex:1; min-width:120px;">
@@ -1799,7 +1370,7 @@ function initSchedule() {
                         <label for="eventDaily" style="margin:0; font-size:0.9rem; cursor:pointer;">Repeat every day</label>
                     </div>
                 </div>
-            
+
                 <!-- Row: Start Time + End Time -->
                 <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
                     <div class="form-group" style="flex:1; min-width:120px;">
@@ -1811,17 +1382,17 @@ function initSchedule() {
                         <input type="time" id="eventEnd" value="10:00" required>
                     </div>
                 </div>
-            
+
                 <div class="form-group">
                     <label for="eventLocation">Location (optional)</label>
                     <input type="text" id="eventLocation" placeholder="e.g., Room 101, Library">
                 </div>
-            
+
                 <div class="form-group">
                     <label for="eventDescription">Description (optional)</label>
                     <textarea id="eventDescription" rows="2" placeholder="Add notes..."></textarea>
                 </div>
-            
+
                 <!-- Row: Color + Timer checkbox -->
                 <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
                     <div class="form-group" style="flex:1; min-width:140px;">
@@ -1851,11 +1422,11 @@ function initSchedule() {
                 const colorClass = overlay.querySelector('#eventColor').value;
                 const daily = overlay.querySelector('#eventDaily').checked;
                 const hasTimer = overlay.querySelector('#eventHasTimer').checked;
-            
+
                 if (!title) { showNotification('Please enter a title', true); return false; }
                 if (!startTime || !endTime) { showNotification('Please set start and end times', true); return false; }
                 if (startTime >= endTime) { showNotification('End time must be after start time', true); return false; }
-            
+
                 try {
                     const daysToPost = daily ? [0,1,2,3,4,5,6] : [day];
                     for (const d of daysToPost) {
@@ -1874,7 +1445,7 @@ function initSchedule() {
                                 location,
                                 colorClass,
                                 description,
-                                hasTimer // <-- new field
+                                hasTimer
                             })
                         });
                         if (!response.ok) {
@@ -2263,13 +1834,240 @@ function initSteadyMode() {
     recalcRest();
     updateSteadyDisplay();
     updateSteadyStats();
-    loadTimedTasks();
+    loadTimedTasks(); // Load timed tasks when steady mode initializes
 
     console.log('✅ Steady Mode initialized with studySecs=', studySecs, 'restSecs=', restSecs);
 }
 
+// ===================================================================
+//  TIMED TASKS (Steady Mode)
+// ===================================================================
+let timedTasksData = [];
+let activeTimer = null; // { taskId, startTime, elapsedBeforePause, paused }
+let timerInterval = null;
 
-loadTimedTasks();
+function elapsedSeconds(taskId) {
+    if (!activeTimer || activeTimer.taskId !== taskId) return 0;
+    const now = Date.now();
+    let elapsed = activeTimer.elapsedBeforePause || 0;
+    if (!activeTimer.paused) {
+        elapsed += (now - activeTimer.startTime) / 1000;
+    }
+    return Math.floor(elapsed);
+}
+
+function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+function renderTaskCard(task) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const isCompleted = task.last_completed_date === todayStr;
+    const isActive = activeTimer && activeTimer.taskId === task.id;
+    const isRunning = isActive && !activeTimer.paused;
+    const isPaused = isActive && activeTimer.paused;
+    const elapsed = isActive ? elapsedSeconds(task.id) : 0;
+
+    let actionButtons = '';
+    if (isCompleted) {
+        actionButtons = `<span style="font-weight:600; color:var(--success);">✅ Done for today</span>`;
+    } else {
+        if (isRunning) {
+            actionButtons = `
+                <button class="btn btn-secondary btn-sm timer-pause" data-id="${task.id}">⏸ Pause</button>
+                <button class="btn btn-primary btn-sm timer-finish" data-id="${task.id}">✅ Finish</button>
+            `;
+        } else if (isPaused) {
+            actionButtons = `
+                <button class="btn btn-secondary btn-sm timer-resume" data-id="${task.id}">▶️ Resume</button>
+                <button class="btn btn-primary btn-sm timer-finish" data-id="${task.id}">✅ Finish</button>
+            `;
+        } else {
+            actionButtons = `
+                <button class="btn btn-primary btn-sm timer-start" data-id="${task.id}">▶ Start</button>
+            `;
+        }
+    }
+
+    return `
+        <div class="timed-task-item" data-id="${task.id}" style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 1rem; background:var(--border-light); border-radius:12px; border-left:4px solid var(--primary);">
+            <div>
+                <div style="font-weight:600;">${escapeHtml(task.subject)}</div>
+                <div style="font-size:0.8rem; color:var(--text-secondary);">${task.start_time} – ${task.end_time} ${task.location ? '· ' + escapeHtml(task.location) : ''}</div>
+                ${isActive ? `<div style="font-size:0.8rem; color:var(--primary); font-weight:600;" class="timer-display-${task.id}">⏱️ ${formatTime(elapsed)}</div>` : ''}
+                ${!isCompleted ? `<div style="font-size:0.75rem; color:var(--text-secondary);">${isActive ? '⏳ In progress' : '⏳ Not started'}</div>` : `<div style="font-size:0.75rem; color:var(--success);">✅ Completed (${task.last_duration_seconds ? Math.floor(task.last_duration_seconds/60)+'m' : ''})</div>`}
+            </div>
+            <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+                ${actionButtons}
+            </div>
+        </div>
+    `;
+}
+
+function attachTaskEventListeners(container) {
+    container.querySelectorAll('.timer-start').forEach(btn => {
+        btn.addEventListener('click', () => startTimedTask(parseInt(btn.dataset.id)));
+    });
+    container.querySelectorAll('.timer-pause').forEach(btn => {
+        btn.addEventListener('click', () => pauseTimedTask(parseInt(btn.dataset.id)));
+    });
+    container.querySelectorAll('.timer-resume').forEach(btn => {
+        btn.addEventListener('click', () => resumeTimedTask(parseInt(btn.dataset.id)));
+    });
+    container.querySelectorAll('.timer-finish').forEach(btn => {
+        btn.addEventListener('click', () => finishTimedTask(parseInt(btn.dataset.id)));
+    });
+}
+
+function updateTaskUI(taskId) {
+    const task = timedTasksData.find(t => t.id === taskId);
+    if (!task) return;
+    const container = document.getElementById('timedTasksContainer');
+    const card = container.querySelector(`.timed-task-item[data-id="${taskId}"]`);
+    if (!card) return;
+    const newCardHTML = renderTaskCard(task);
+    card.outerHTML = newCardHTML;
+    const newCard = container.querySelector(`.timed-task-item[data-id="${taskId}"]`);
+    if (newCard) attachTaskEventListeners(newCard);
+    refreshIcons();
+}
+
+async function loadTimedTasks() {
+    const container = document.getElementById('timedTasksContainer');
+    if (!container) return;
+    if (!isLoggedIn) {
+        container.innerHTML = '<p style="color:var(--text-tertiary);">Login to see tasks.</p>';
+        return;
+    }
+    try {
+        const response = await fetch(`${API_BASE}/api/schedule?userId=${user.id}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch schedule');
+        const allEvents = await response.json();
+        const todayDay = new Date().getDay();
+        timedTasksData = allEvents.filter(e => e.has_timer && e.day === todayDay);
+
+        if (timedTasksData.length === 0) {
+            container.innerHTML = '<p style="color:var(--text-tertiary);">No timed tasks for today.</p>';
+            return;
+        }
+        container.innerHTML = timedTasksData.map(task => renderTaskCard(task)).join('');
+        attachTaskEventListeners(container);
+        refreshIcons();
+    } catch (err) {
+        console.error('Load timed tasks error:', err);
+        container.innerHTML = '<p style="color:var(--danger);">Failed to load tasks.</p>';
+    }
+}
+
+function startTimedTask(taskId) {
+    if (activeTimer && !activeTimer.paused) {
+        pauseTimedTask(activeTimer.taskId);
+    }
+    activeTimer = {
+        taskId,
+        startTime: Date.now(),
+        elapsedBeforePause: 0,
+        paused: false
+    };
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+        const display = document.querySelector(`.timer-display-${taskId}`);
+        if (display) {
+            const secs = elapsedSeconds(taskId);
+            display.textContent = `⏱️ ${formatTime(secs)}`;
+        }
+    }, 500);
+    updateTaskUI(taskId);
+}
+
+function pauseTimedTask(taskId) {
+    if (!activeTimer || activeTimer.taskId !== taskId) return;
+    if (activeTimer.paused) return;
+    const now = Date.now();
+    const elapsed = activeTimer.elapsedBeforePause || 0;
+    activeTimer.elapsedBeforePause = elapsed + (now - activeTimer.startTime) / 1000;
+    activeTimer.paused = true;
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = null;
+    updateTaskUI(taskId);
+}
+
+function resumeTimedTask(taskId) {
+    if (!activeTimer || activeTimer.taskId !== taskId || !activeTimer.paused) return;
+    activeTimer.startTime = Date.now();
+    activeTimer.paused = false;
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+        const display = document.querySelector(`.timer-display-${taskId}`);
+        if (display) {
+            const secs = elapsedSeconds(taskId);
+            display.textContent = `⏱️ ${formatTime(secs)}`;
+        }
+    }, 500);
+    updateTaskUI(taskId);
+}
+
+async function finishTimedTask(taskId) {
+    if (!activeTimer || activeTimer.taskId !== taskId) {
+        showNotification('No active timer for this task.', true);
+        return;
+    }
+    const duration = elapsedSeconds(taskId);
+    if (duration < 1) {
+        showNotification('Task duration too short (less than 1 second).', true);
+        return;
+    }
+    try {
+        const response = await fetch(`${API_BASE}/api/schedule/${taskId}/complete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ userId: user.id, durationSeconds: duration })
+        });
+        if (!response.ok) {
+            const data = await response.json();
+            showNotification(data.error || 'Failed to complete task', true);
+            return;
+        }
+        await fetch(`${API_BASE}/api/stats`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({
+                userId: user.id,
+                sessionTime: duration,
+                sessionIncrement: true,
+                streakUpdate: true
+            })
+        });
+        await loadStats();
+        updateSteadyStats();
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = null;
+        activeTimer = null;
+        const task = timedTasksData.find(t => t.id === taskId);
+        if (task) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            task.last_completed_date = todayStr;
+            task.last_duration_seconds = duration;
+        }
+        showNotification(`✅ Completed task in ${Math.floor(duration/60)} min!`);
+        updateTaskUI(taskId);
+        updateStats();
+    } catch (err) {
+        console.error('Finish task error:', err);
+        showNotification('Could not connect to server.', true);
+    }
+}
+
 // ===================================================================
 //  NAVIGATION
 // ===================================================================
@@ -2291,10 +2089,14 @@ function initNavigation() {
                 sidebar.classList.remove('open');
                 if (overlay) overlay.classList.remove('active');
             }
-            if (pageId === 'progress-page') loadProgress();
             if (pageId === 'calendar-page') renderCalendar();
             if (pageId === 'schedule-page') renderSchedule();
-            if (pageId === 'steady-page') loadTimedTasks();
+            if (pageId === 'steady-page') {
+                loadTimedTasks();
+            }
+            if (pageId === 'progress-page') {
+                loadProgress();
+            }
         });
     });
 }
@@ -2375,9 +2177,6 @@ function initQuickActions() {
                 document.getElementById('addReminderBtn')?.click();
             } else if (action === 'progress') {
                 document.querySelector('.nav-link[data-page="progress"]')?.click();
-            }else if (action === 'progress') {
-                if (!requireLogin()) return;
-                showNotification('📊 Progress page coming soon!');
             } else {
                 showNotification('✨ Feature coming soon!');
             }
@@ -2745,9 +2544,12 @@ async function updateDeadlines() {
 }
 
 // ===================================================================
-//  NOTES FUNCTIONS (with Quill Rich Editor)
+//  NOTES (Quill)
 // ===================================================================
-let quill = null; // Quill editor instance
+let quill = null;
+let notes = [];
+let currentNoteId = null;
+let noteSaveTimeout = null;
 
 function initQuill() {
     if (quill) return;
@@ -2779,7 +2581,6 @@ function initQuill() {
         formats: ['header', 'bold', 'italic', 'underline', 'strike', 'blockquote', 'code-block', 'list', 'indent', 'link', 'image', 'video', 'color', 'background', 'align']
     });
 
-    // ---- Image Upload Handler ----
     const imageHandler = () => {
         if (!isLoggedIn) { requireLogin(); return; }
         const input = document.createElement('input');
@@ -2810,7 +2611,6 @@ function initQuill() {
                 quill.insertEmbed(index, 'image', data.url);
                 quill.setSelection(index + 1);
                 setNoteStatus('Image inserted');
-                // Trigger auto-save
                 autoSaveQuill();
             } catch (err) {
                 console.error('Upload error:', err);
@@ -2825,7 +2625,6 @@ function initQuill() {
         toolbar.addHandler('image', imageHandler);
     }
 
-    // ---- Auto-save on text change ----
     quill.on('text-change', () => {
         autoSaveQuill();
     });
@@ -2860,7 +2659,7 @@ async function loadNotes() {
         const data = await response.json();
         notes = data;
         renderNoteList();
-        initQuill(); // ensure quill is initialized
+        initQuill();
         if (!currentNoteId && notes.length > 0) {
             selectNote(notes[0].id);
         } else if (notes.length === 0) {
@@ -2869,189 +2668,6 @@ async function loadNotes() {
     } catch (err) {
         console.error('Load notes error:', err);
         listContainer.innerHTML = '<p style="color:var(--danger);">Failed to load notes.</p>';
-    }
-}
-
-async function loadProgress() {
-    const container = document.getElementById('progressContent');
-    if (!container) return;
-
-    if (!isLoggedIn) {
-        container.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:2rem;">Login to see your progress.</p>';
-        return;
-    }
-
-    try {
-        // Fetch all data in parallel
-        const [statsRes, subjectsRes, assignmentsRes, goalsRes, notesRes, calendarRes, remindersRes] = await Promise.all([
-            fetch(`${API_BASE}/api/stats?userId=${user.id}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            }),
-            fetch(`${API_BASE}/api/subjects?userId=${user.id}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            }),
-            fetch(`${API_BASE}/api/assignments?userId=${user.id}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            }),
-            fetch(`${API_BASE}/api/goals?userId=${user.id}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            }),
-            fetch(`${API_BASE}/api/notes?userId=${user.id}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            }),
-            fetch(`${API_BASE}/api/calendar?userId=${user.id}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            }),
-            fetch(`${API_BASE}/api/reminders?userId=${user.id}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            })
-        ]);
-
-        const stats = statsRes.ok ? await statsRes.json() : { xp: 0, level: 1, total_focus_seconds: 0, total_sessions: 0, streak: 0 };
-        const subjects = subjectsRes.ok ? await subjectsRes.json() : [];
-        const assignments = assignmentsRes.ok ? await assignmentsRes.json() : [];
-        const goals = goalsRes.ok ? await goalsRes.json() : [];
-        const notes = notesRes.ok ? await notesRes.json() : [];
-        const calendarEvents = calendarRes.ok ? await calendarRes.json() : [];
-        const reminders = remindersRes.ok ? await remindersRes.json() : [];
-
-        // Compute derived stats
-        const totalSubjects = subjects.length;
-        const totalAssignments = assignments.length;
-        const completedAssignments = assignments.filter(a => a.completed).length;
-        const totalGoals = goals.length;
-        const completedGoals = goals.filter(g => g.done).length;
-        const totalNotes = notes.length;
-        const totalEvents = calendarEvents.length;
-        const totalReminders = reminders.length;
-
-        const xp = stats.xp || 0;
-        const level = stats.level || 1;
-        const needed = level * 100;
-        const xpPercent = Math.min(100, (xp / needed) * 100);
-        const focusHours = Math.floor((stats.total_focus_seconds || 0) / 3600);
-        const focusMins = Math.floor(((stats.total_focus_seconds || 0) % 3600) / 60);
-
-        // Build HTML
-        let html = `
-            <div style="display:grid; grid-template-columns: 1fr 2fr; gap:1.5rem; margin-bottom:2rem;">
-                <!-- XP Ring -->
-                <div style="background:var(--surface); border-radius:16px; border:1px solid var(--border); padding:1.5rem; text-align:center;">
-                    <div class="progress-ring" style="--pct: ${xpPercent};">
-                        <span class="ring-label">${xp} / ${needed}</span>
-                    </div>
-                    <div style="font-family:var(--font-display); font-size:1.8rem; font-weight:700; color:var(--primary);">Level ${level}</div>
-                    <div style="font-size:0.9rem; color:var(--text-secondary);">${xp} XP · ${needed - xp} XP to next level</div>
-                </div>
-
-                <!-- Stats Summary -->
-                <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:0.8rem;">
-                    <div class="progress-stat-card">
-                        <div class="stat-icon">⏱️</div>
-                        <div class="stat-number">${focusHours}h ${focusMins}m</div>
-                        <div class="stat-label">Total Study Time</div>
-                    </div>
-                    <div class="progress-stat-card">
-                        <div class="stat-icon">🏆</div>
-                        <div class="stat-number">${stats.total_sessions || 0}</div>
-                        <div class="stat-label">Sessions</div>
-                    </div>
-                    <div class="progress-stat-card">
-                        <div class="stat-icon">🔥</div>
-                        <div class="stat-number">${stats.streak || 0}</div>
-                        <div class="stat-label">Day Streak</div>
-                    </div>
-                    <div class="progress-stat-card">
-                        <div class="stat-icon">📚</div>
-                        <div class="stat-number">${totalSubjects}</div>
-                        <div class="stat-label">Subjects</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Second Row: More Stats -->
-            <div class="progress-stats-grid">
-                <div class="progress-stat-card">
-                    <div class="stat-icon">📋</div>
-                    <div class="stat-number">${completedAssignments}/${totalAssignments}</div>
-                    <div class="stat-label">Assignments Done</div>
-                </div>
-                <div class="progress-stat-card">
-                    <div class="stat-icon">🎯</div>
-                    <div class="stat-number">${completedGoals}/${totalGoals}</div>
-                    <div class="stat-label">Goals Completed</div>
-                </div>
-                <div class="progress-stat-card">
-                    <div class="stat-icon">📝</div>
-                    <div class="stat-number">${totalNotes}</div>
-                    <div class="stat-label">Notes</div>
-                </div>
-                <div class="progress-stat-card">
-                    <div class="stat-icon">📅</div>
-                    <div class="stat-number">${totalEvents}</div>
-                    <div class="stat-label">Calendar Events</div>
-                </div>
-                <div class="progress-stat-card">
-                    <div class="stat-icon">⏰</div>
-                    <div class="stat-number">${totalReminders}</div>
-                    <div class="stat-label">Reminders</div>
-                </div>
-                <div class="progress-stat-card">
-                    <div class="stat-icon">🏅</div>
-                    <div class="stat-number">${badges.length}</div>
-                    <div class="stat-label">Badges Earned</div>
-                </div>
-            </div>
-        `;
-
-        // Badges
-        if (badges.length > 0) {
-            html += `
-                <div style="margin-top:2rem;">
-                    <h3 style="font-family:var(--font-display); margin-bottom:0.8rem;"><i data-lucide="trophy"></i> Badges</h3>
-                    <div style="display:flex; gap:0.8rem; flex-wrap:wrap;">
-                        ${badges.map(b => `
-                            <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:0.6rem 1rem; display:flex; align-items:center; gap:0.5rem;">
-                                <span style="font-size:1.4rem;">${b.icon}</span>
-                                <span style="font-weight:600;">${b.name}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
-        // Recent Activity (latest 10)
-        try {
-            const actRes = await fetch(`${API_BASE}/api/activities?userId=${user.id}&limit=10`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (actRes.ok) {
-                const actData = await actRes.json();
-                if (actData.activities && actData.activities.length > 0) {
-                    html += `
-                        <div style="margin-top:2rem;">
-                            <h3 style="font-family:var(--font-display); margin-bottom:0.8rem;"><i data-lucide="activity"></i> Recent Activity</h3>
-                            <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:1rem;">
-                                ${actData.activities.slice(0, 10).map(a => `
-                                    <div style="display:flex; justify-content:space-between; padding:0.5rem 0; border-bottom:1px solid var(--border-light);">
-                                        <span>${escapeHtml(a.message)}</span>
-                                        <span style="color:var(--text-tertiary); font-size:0.8rem;">${timeAgo(a.created_at)}</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    `;
-                }
-            }
-        } catch (e) { /* ignore */ }
-
-        container.innerHTML = html;
-        refreshIcons();
-
-    } catch (err) {
-        console.error('Load progress error:', err);
-        container.innerHTML = '<p style="color:var(--danger);">Failed to load progress data.</p>';
     }
 }
 
@@ -3073,7 +2689,6 @@ function renderNoteList() {
     container.innerHTML = filtered.map(n => {
         const isActive = n.id === currentNoteId ? 'active' : '';
         let thumbnail = '';
-        // Extract first image URL from content (if any)
         if (n.content) {
             const match = n.content.match(/<img[^>]+src=["']([^"']+)["']/);
             if (match) thumbnail = match[1];
@@ -3246,6 +2861,182 @@ async function deleteCurrentNote() {
 }
 
 // ===================================================================
+//  PROGRESS PAGE
+// ===================================================================
+async function loadProgress() {
+    const container = document.getElementById('progressContent');
+    if (!container) return;
+
+    if (!isLoggedIn) {
+        container.innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:2rem;">Login to see your progress.</p>';
+        return;
+    }
+
+    try {
+        const [statsRes, subjectsRes, assignmentsRes, goalsRes, notesRes, calendarRes, remindersRes] = await Promise.all([
+            fetch(`${API_BASE}/api/stats?userId=${user.id}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            }),
+            fetch(`${API_BASE}/api/subjects?userId=${user.id}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            }),
+            fetch(`${API_BASE}/api/assignments?userId=${user.id}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            }),
+            fetch(`${API_BASE}/api/goals?userId=${user.id}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            }),
+            fetch(`${API_BASE}/api/notes?userId=${user.id}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            }),
+            fetch(`${API_BASE}/api/calendar?userId=${user.id}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            }),
+            fetch(`${API_BASE}/api/reminders?userId=${user.id}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            })
+        ]);
+
+        const stats = statsRes.ok ? await statsRes.json() : { xp: 0, level: 1, total_focus_seconds: 0, total_sessions: 0, streak: 0 };
+        const subjects = subjectsRes.ok ? await subjectsRes.json() : [];
+        const assignments = assignmentsRes.ok ? await assignmentsRes.json() : [];
+        const goals = goalsRes.ok ? await goalsRes.json() : [];
+        const notes = notesRes.ok ? await notesRes.json() : [];
+        const calendarEvents = calendarRes.ok ? await calendarRes.json() : [];
+        const reminders = remindersRes.ok ? await remindersRes.json() : [];
+
+        const totalSubjects = subjects.length;
+        const totalAssignments = assignments.length;
+        const completedAssignments = assignments.filter(a => a.completed).length;
+        const totalGoals = goals.length;
+        const completedGoals = goals.filter(g => g.done).length;
+        const totalNotes = notes.length;
+        const totalEvents = calendarEvents.length;
+        const totalReminders = reminders.length;
+
+        const xp = stats.xp || 0;
+        const level = stats.level || 1;
+        const needed = level * 100;
+        const xpPercent = Math.min(100, (xp / needed) * 100);
+        const focusHours = Math.floor((stats.total_focus_seconds || 0) / 3600);
+        const focusMins = Math.floor(((stats.total_focus_seconds || 0) % 3600) / 60);
+
+        let html = `
+            <div style="display:grid; grid-template-columns: 1fr 2fr; gap:1.5rem; margin-bottom:2rem;">
+                <div style="background:var(--surface); border-radius:16px; border:1px solid var(--border); padding:1.5rem; text-align:center;">
+                    <div class="progress-ring" style="--pct: ${xpPercent};">
+                        <span class="ring-label">${xp} / ${needed}</span>
+                    </div>
+                    <div style="font-family:var(--font-display); font-size:1.8rem; font-weight:700; color:var(--primary);">Level ${level}</div>
+                    <div style="font-size:0.9rem; color:var(--text-secondary);">${xp} XP · ${needed - xp} XP to next level</div>
+                </div>
+                <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:0.8rem;">
+                    <div class="progress-stat-card">
+                        <div class="stat-icon">⏱️</div>
+                        <div class="stat-number">${focusHours}h ${focusMins}m</div>
+                        <div class="stat-label">Total Study Time</div>
+                    </div>
+                    <div class="progress-stat-card">
+                        <div class="stat-icon">🏆</div>
+                        <div class="stat-number">${stats.total_sessions || 0}</div>
+                        <div class="stat-label">Sessions</div>
+                    </div>
+                    <div class="progress-stat-card">
+                        <div class="stat-icon">🔥</div>
+                        <div class="stat-number">${stats.streak || 0}</div>
+                        <div class="stat-label">Day Streak</div>
+                    </div>
+                    <div class="progress-stat-card">
+                        <div class="stat-icon">📚</div>
+                        <div class="stat-number">${totalSubjects}</div>
+                        <div class="stat-label">Subjects</div>
+                    </div>
+                </div>
+            </div>
+            <div class="progress-stats-grid">
+                <div class="progress-stat-card">
+                    <div class="stat-icon">📋</div>
+                    <div class="stat-number">${completedAssignments}/${totalAssignments}</div>
+                    <div class="stat-label">Assignments Done</div>
+                </div>
+                <div class="progress-stat-card">
+                    <div class="stat-icon">🎯</div>
+                    <div class="stat-number">${completedGoals}/${totalGoals}</div>
+                    <div class="stat-label">Goals Completed</div>
+                </div>
+                <div class="progress-stat-card">
+                    <div class="stat-icon">📝</div>
+                    <div class="stat-number">${totalNotes}</div>
+                    <div class="stat-label">Notes</div>
+                </div>
+                <div class="progress-stat-card">
+                    <div class="stat-icon">📅</div>
+                    <div class="stat-number">${totalEvents}</div>
+                    <div class="stat-label">Calendar Events</div>
+                </div>
+                <div class="progress-stat-card">
+                    <div class="stat-icon">⏰</div>
+                    <div class="stat-number">${totalReminders}</div>
+                    <div class="stat-label">Reminders</div>
+                </div>
+                <div class="progress-stat-card">
+                    <div class="stat-icon">🏅</div>
+                    <div class="stat-number">${badges.length}</div>
+                    <div class="stat-label">Badges Earned</div>
+                </div>
+            </div>
+        `;
+
+        if (badges.length > 0) {
+            html += `
+                <div style="margin-top:2rem;">
+                    <h3 style="font-family:var(--font-display); margin-bottom:0.8rem;"><i data-lucide="trophy"></i> Badges</h3>
+                    <div style="display:flex; gap:0.8rem; flex-wrap:wrap;">
+                        ${badges.map(b => `
+                            <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:0.6rem 1rem; display:flex; align-items:center; gap:0.5rem;">
+                                <span style="font-size:1.4rem;">${b.icon}</span>
+                                <span style="font-weight:600;">${b.name}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        try {
+            const actRes = await fetch(`${API_BASE}/api/activities?userId=${user.id}&limit=10`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (actRes.ok) {
+                const actData = await actRes.json();
+                if (actData.activities && actData.activities.length > 0) {
+                    html += `
+                        <div style="margin-top:2rem;">
+                            <h3 style="font-family:var(--font-display); margin-bottom:0.8rem;"><i data-lucide="activity"></i> Recent Activity</h3>
+                            <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:1rem;">
+                                ${actData.activities.slice(0, 10).map(a => `
+                                    <div style="display:flex; justify-content:space-between; padding:0.5rem 0; border-bottom:1px solid var(--border-light);">
+                                        <span>${escapeHtml(a.message)}</span>
+                                        <span style="color:var(--text-tertiary); font-size:0.8rem;">${timeAgo(a.created_at)}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+        } catch (e) { /* ignore */ }
+
+        container.innerHTML = html;
+        refreshIcons();
+
+    } catch (err) {
+        console.error('Load progress error:', err);
+        container.innerHTML = '<p style="color:var(--danger);">Failed to load progress data.</p>';
+    }
+}
+
+// ===================================================================
 //  INIT FUNCTIONS
 // ===================================================================
 function initGoals() {
@@ -3273,7 +3064,7 @@ function initAssignments() {
 }
 
 // ===================================================================
-//  GLOBAL VARIABLES (declared before DOMContentLoaded)
+//  GLOBAL VARIABLES
 // ===================================================================
 let pomodoroInterval = null;
 let pomodoroTime = 25 * 60;
@@ -3311,39 +3102,15 @@ function parseDateKey(key) {
     return { year: y, month: m - 1, day: d };
 }
 
-
-// Sidebar toggle on logo click
-document.querySelector('.logo a')?.addEventListener('click', function(e) {
-    e.preventDefault();
-    toggleSidebar();
-});
-
-// Show toggle button when sidebar is hidden (we'll add a button in HTML)
-// Actually, we'll create a floating toggle button dynamically.
-const toggleBtn = document.createElement('button');
-toggleBtn.className = 'sidebar-toggle-btn';
-toggleBtn.innerHTML = '<i data-lucide="menu"></i>';
-toggleBtn.setAttribute('aria-label', 'Toggle sidebar');
-document.body.appendChild(toggleBtn);
-toggleBtn.addEventListener('click', toggleSidebar);
-refreshIcons();
-
-// Load progress when navigating to progress page
-// The navigation already handles page switching, but we need to load progress data when the page becomes active.
-// We'll override the initNavigation to call loadProgress when pageId === 'progress-page'.
-
-
 // ===================================================================
 //  DOM CONTENT LOADED
 // ===================================================================
 document.addEventListener('DOMContentLoaded', async () => {
-    // Guest banner
     const banner = document.getElementById('guestBanner');
     if (banner) {
         banner.style.display = isLoggedIn ? 'none' : 'block';
     }
 
-    // User name / greeting
     const nameEl = document.getElementById('dashboardUserName');
     if (nameEl) {
         nameEl.textContent = isLoggedIn ? user.name : 'Guest';
@@ -3353,7 +3120,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         greetingEl.textContent = isLoggedIn ? `Welcome back, ${user.name}` : 'Welcome to StudyFlow';
     }
 
-    // Load data
     await loadStats();
     if (isLoggedIn) {
         await loadNotifications();
@@ -3368,7 +3134,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('notificationList').innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">Login to see notifications.</p>';
     }
 
-    // Init modules
     initNavigation();
     initDarkMode();
     initHamburger();
@@ -3379,7 +3144,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     initCalendar();
     initSchedule();
     initSteadyMode();
-    loadTimedTasks();
     initQuickActions();
     initDashboardLinks();
     animateOnLoad();
@@ -3387,14 +3151,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateStats();
     updateDeadlines();
 
-    // ===== NOTES INIT =====
+    // Notes
     if (isLoggedIn) {
         await loadNotes();
     } else {
         document.getElementById('notesListContainer').innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">Login to manage notes.</p>';
     }
 
-    // Notes event listeners
     document.getElementById('newNoteBtn')?.addEventListener('click', () => {
         clearEditor();
         document.getElementById('noteTitle').focus();
@@ -3435,7 +3198,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // ---- Note Preview Button ----
     document.getElementById('previewNoteBtn')?.addEventListener('click', () => {
         const content = document.getElementById('noteContent')?.value || '';
         const title = document.getElementById('noteTitle').value || 'Untitled';
@@ -3443,7 +3205,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             showNotification('Nothing to preview.', true);
             return;
         }
-        // Convert HTML content to plain text preview? For Quill we can just show the HTML.
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
         overlay.innerHTML = `
@@ -3463,6 +3224,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
+    // Refresh progress on button click
+    document.getElementById('refreshProgressBtn')?.addEventListener('click', loadProgress);
+
     // Logout
     document.getElementById('logoutBtn')?.addEventListener('click', () => {
         localStorage.removeItem('token');
@@ -3470,7 +3234,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.location.href = 'login.html';
     });
 
-    // ---- Add Subject ----
+    // Add Subject
     document.getElementById('addSubjectBtn')?.addEventListener('click', () => {
         if (!requireLogin()) return;
         openModal('Add New Subject', `
@@ -3512,7 +3276,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    // ---- Add Assignment ----
+    // Add Assignment
     document.getElementById('addAssignmentBtn')?.addEventListener('click', async () => {
         if (!requireLogin()) return;
 
@@ -3618,7 +3382,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    // ---- Add Reminder ----
+    // Add Reminder
     document.getElementById('addReminderBtn')?.addEventListener('click', () => {
         if (!requireLogin()) return;
         openModal('Set Reminder', `
@@ -3698,3 +3462,4 @@ window.renderSchedule = renderSchedule;
 window.loadSchedule = loadSchedule;
 window.loadCalendarEvents = loadCalendarEvents;
 window.updateDeadlines = updateDeadlines;
+window.loadProgress = loadProgress;
