@@ -95,14 +95,213 @@ async function loadTimedTasks() {
     }
 }
 
-function elapsedSeconds(task) {
-    if (!activeTimer || activeTimer.taskId !== task.id) return 0;
+function elapsedSeconds(taskId) {
+    if (!activeTimer || activeTimer.taskId !== taskId) return 0;
     const now = Date.now();
     let elapsed = activeTimer.elapsedBeforePause || 0;
     if (!activeTimer.paused) {
         elapsed += (now - activeTimer.startTime) / 1000;
     }
     return Math.floor(elapsed);
+}
+
+function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+async function loadTimedTasks() {
+    const container = document.getElementById('timedTasksContainer');
+    if (!container) return;
+    if (!isLoggedIn) {
+        container.innerHTML = '<p style="color:var(--text-tertiary);">Login to see tasks.</p>';
+        return;
+    }
+    try {
+        const response = await fetch(`${API_BASE}/api/schedule?userId=${user.id}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch schedule');
+        const allEvents = await response.json();
+        const todayDay = new Date().getDay();
+        const timedTasks = allEvents.filter(e => e.has_timer && e.day === todayDay);
+
+        if (timedTasks.length === 0) {
+            container.innerHTML = '<p style="color:var(--text-tertiary);">No timed tasks for today.</p>';
+            return;
+        }
+
+        const todayStr = new Date().toISOString().split('T')[0];
+        let html = '<div style="display:flex; flex-direction:column; gap:0.75rem;">';
+        for (const task of timedTasks) {
+            const isCompleted = task.last_completed_date === todayStr;
+            const isActive = activeTimer && activeTimer.taskId === task.id;
+            const isRunning = isActive && !activeTimer.paused;
+            const isPaused = isActive && activeTimer.paused;
+
+            let actionButtons = '';
+            if (isCompleted) {
+                actionButtons = `<span style="font-weight:600; color:var(--success);">✅ Done for today</span>`;
+            } else {
+                if (isRunning) {
+                    actionButtons = `
+                        <button class="btn btn-secondary btn-sm timer-pause" data-id="${task.id}">⏸ Pause</button>
+                        <button class="btn btn-primary btn-sm timer-finish" data-id="${task.id}">✅ Finish</button>
+                    `;
+                } else if (isPaused) {
+                    actionButtons = `
+                        <button class="btn btn-secondary btn-sm timer-resume" data-id="${task.id}">▶️ Resume</button>
+                        <button class="btn btn-primary btn-sm timer-finish" data-id="${task.id}">✅ Finish</button>
+                    `;
+                } else {
+                    actionButtons = `
+                        <button class="btn btn-primary btn-sm timer-start" data-id="${task.id}">▶ Start</button>
+                    `;
+                }
+            }
+
+            const elapsed = isActive ? elapsedSeconds(task.id) : 0;
+
+            html += `
+                <div class="timed-task-item" data-id="${task.id}" style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 1rem; background:var(--border-light); border-radius:12px; border-left:4px solid var(--primary);">
+                    <div>
+                        <div style="font-weight:600;">${escapeHtml(task.subject)}</div>
+                        <div style="font-size:0.8rem; color:var(--text-secondary);">${task.start_time} – ${task.end_time} ${task.location ? '· ' + escapeHtml(task.location) : ''}</div>
+                        ${isActive ? `<div style="font-size:0.8rem; color:var(--primary); font-weight:600;" class="timer-display-${task.id}">⏱️ ${formatTime(elapsed)}</div>` : ''}
+                        ${!isCompleted ? `<div style="font-size:0.75rem; color:var(--text-secondary);">${isActive ? '⏳ In progress' : '⏳ Not started'}</div>` : `<div style="font-size:0.75rem; color:var(--success);">✅ Completed (${task.last_duration_seconds ? Math.floor(task.last_duration_seconds/60)+'m' : ''})</div>`}
+                    </div>
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+                        ${actionButtons}
+                    </div>
+                </div>
+            `;
+        }
+        html += '</div>';
+        container.innerHTML = html;
+
+        // Attach event listeners
+        container.querySelectorAll('.timer-start').forEach(btn => {
+            btn.addEventListener('click', () => startTimedTask(parseInt(btn.dataset.id)));
+        });
+        container.querySelectorAll('.timer-pause').forEach(btn => {
+            btn.addEventListener('click', () => pauseTimedTask(parseInt(btn.dataset.id)));
+        });
+        container.querySelectorAll('.timer-resume').forEach(btn => {
+            btn.addEventListener('click', () => resumeTimedTask(parseInt(btn.dataset.id)));
+        });
+        container.querySelectorAll('.timer-finish').forEach(btn => {
+            btn.addEventListener('click', () => finishTimedTask(parseInt(btn.dataset.id)));
+        });
+        refreshIcons();
+    } catch (err) {
+        console.error('Load timed tasks error:', err);
+        container.innerHTML = '<p style="color:var(--danger);">Failed to load tasks.</p>';
+    }
+}
+
+function startTimedTask(taskId) {
+    // If there's an active timer, pause it first
+    if (activeTimer && !activeTimer.paused) {
+        pauseTimedTask(activeTimer.taskId);
+    }
+    activeTimer = {
+        taskId,
+        startTime: Date.now(),
+        elapsedBeforePause: 0,
+        paused: false
+    };
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+        const display = document.querySelector(`.timer-display-${taskId}`);
+        if (display) {
+            const secs = elapsedSeconds(taskId);
+            display.textContent = `⏱️ ${formatTime(secs)}`;
+        }
+    }, 500);
+    loadTimedTasks();
+}
+
+function pauseTimedTask(taskId) {
+    if (!activeTimer || activeTimer.taskId !== taskId) return;
+    if (activeTimer.paused) return;
+    const now = Date.now();
+    const elapsed = activeTimer.elapsedBeforePause || 0;
+    activeTimer.elapsedBeforePause = elapsed + (now - activeTimer.startTime) / 1000;
+    activeTimer.paused = true;
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = null;
+    loadTimedTasks();
+}
+
+function resumeTimedTask(taskId) {
+    if (!activeTimer || activeTimer.taskId !== taskId || !activeTimer.paused) return;
+    activeTimer.startTime = Date.now();
+    activeTimer.paused = false;
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+        const display = document.querySelector(`.timer-display-${taskId}`);
+        if (display) {
+            const secs = elapsedSeconds(taskId);
+            display.textContent = `⏱️ ${formatTime(secs)}`;
+        }
+    }, 500);
+    loadTimedTasks();
+}
+
+async function finishTimedTask(taskId) {
+    if (!activeTimer || activeTimer.taskId !== taskId) {
+        showNotification('No active timer for this task.', true);
+        return;
+    }
+    const duration = elapsedSeconds(taskId);
+    if (duration < 1) {
+        showNotification('Task duration too short (less than 1 second).', true);
+        return;
+    }
+    try {
+        // Mark as completed in backend
+        const response = await fetch(`${API_BASE}/api/schedule/${taskId}/complete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ userId: user.id, durationSeconds: duration })
+        });
+        if (!response.ok) {
+            const data = await response.json();
+            showNotification(data.error || 'Failed to complete task', true);
+            return;
+        }
+        // Update stats (focus time, sessions, streak)
+        await fetch(`${API_BASE}/api/stats`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({
+                userId: user.id,
+                sessionTime: duration,
+                sessionIncrement: true,
+                streakUpdate: true
+            })
+        });
+        // Refresh stats display
+        await loadStats();
+        updateSteadyStats();
+        // Clear active timer
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = null;
+        activeTimer = null;
+        showNotification(`✅ Completed task in ${Math.floor(duration/60)} min!`);
+        loadTimedTasks();
+        updateStats();
+    } catch (err) {
+        console.error('Finish task error:', err);
+        showNotification('Could not connect to server.', true);
+    }
 }
 
 function formatTime(seconds) {
@@ -2064,6 +2263,7 @@ function initSteadyMode() {
     recalcRest();
     updateSteadyDisplay();
     updateSteadyStats();
+    loadTimedTasks();
 
     console.log('✅ Steady Mode initialized with studySecs=', studySecs, 'restSecs=', restSecs);
 }
