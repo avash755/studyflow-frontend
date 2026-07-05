@@ -248,10 +248,6 @@ function escapeHtml(str) {
     });
 }
 
-function toggleSidebar() {
-    document.body.classList.toggle('sidebar-hidden');
-}
-
 function showNotification(msg, isError = false) {
     const existing = document.querySelector('.notification');
     if (existing) existing.remove();
@@ -277,6 +273,10 @@ function refreshIcons() {
     if (typeof lucide !== 'undefined' && lucide.createIcons) {
         lucide.createIcons();
     }
+}
+
+function toggleSidebar() {
+    document.body.classList.toggle('sidebar-hidden');
 }
 
 // ===================================================================
@@ -3309,4 +3309,130 @@ document.addEventListener('DOMContentLoaded', async () => {
         `, async (overlay) => {
             const titleInput = overlay.querySelector('#assignmentTitle');
             const subjectSelect = overlay.querySelector('#assignmentSubject');
-           
+            const dueDateInput = overlay.querySelector('#assignmentDueDate');
+
+            const title = titleInput.value.trim();
+            const subject = subjectSelect.value;
+            const dueDate = dueDateInput.value || null;
+
+            if (!title) {
+                showNotification('Please enter a title.', true);
+                return false;
+            }
+            if (!subject) {
+                showNotification('Please select a subject.', true);
+                return false;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/api/assignments`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({
+                        userId: user.id,
+                        title,
+                        subject,
+                        dueDate
+                    })
+                });
+
+                if (!res.ok) {
+                    const data = await res.json();
+                    showNotification(data.error || 'Failed to add assignment.', true);
+                    return false;
+                }
+
+                const activeFilter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
+                await renderAssignments(activeFilter);
+                await updateStats();
+                await loadNotifications();
+                await updateDeadlines();
+                showNotification('✅ Assignment added successfully!');
+                return true;
+            } catch (err) {
+                console.error('Add assignment error:', err);
+                showNotification('Could not connect to server.', true);
+                return false;
+            }
+        });
+    });
+
+    document.getElementById('addReminderBtn')?.addEventListener('click', () => {
+        if (!requireLogin()) return;
+        openModal('Set Reminder', `
+            <div class="form-group"><label>Title</label><input type="text" id="reminderTitle" placeholder="What to remind?" required></div>
+            <div class="form-group"><label>Date & Time</label><input type="datetime-local" id="reminderDateTime" required></div>
+            <div class="form-group"><label>Repeat</label>
+                <select id="reminderRepeat">
+                    <option value="none">Never</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                </select>
+            </div>
+        `, async (overlay) => {
+            const title = overlay.querySelector('#reminderTitle').value.trim();
+            const dateTime = overlay.querySelector('#reminderDateTime').value;
+            const repeat = overlay.querySelector('#reminderRepeat').value;
+            if (!title || !dateTime) { showNotification('Please fill all fields', true); return false; }
+            try {
+                const res = await fetch(`${API_BASE}/api/reminders`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    body: JSON.stringify({ userId: user.id, title, reminderTime: dateTime, repeat })
+                });
+                if (!res.ok) throw new Error('Failed');
+                await loadReminders();
+                showNotification('✅ Reminder set!');
+                return true;
+            } catch (err) { showNotification('Failed to set reminder', true); return false; }
+        });
+    });
+
+    document.getElementById('notificationBell')?.addEventListener('click', toggleNotifications);
+
+    document.addEventListener('click', (e) => {
+        const container = document.getElementById('notificationContainer');
+        if (container && !container.contains(e.target)) {
+            document.getElementById('notificationDropdown')?.classList.remove('open');
+        }
+    });
+
+    document.getElementById('markAllReadBtn')?.addEventListener('click', async () => {
+        if (!requireLogin()) return;
+        await markAllRead();
+        await loadNotifications();
+    });
+
+    if (isLoggedIn) {
+        await loadReminders();
+        reminderCheckInterval = setInterval(checkReminders, 60000);
+        checkReminders();
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+    } else {
+        document.getElementById('remindersList').innerHTML = `<div class="empty-state"><i data-lucide="bell"></i><p>Login to manage reminders.</p></div>`;
+        refreshIcons();
+    }
+
+    document.addEventListener('click', () => {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            if (ctx.state === 'suspended') ctx.resume();
+        } catch (e) { /* ignore */ }
+    });
+
+    updateDeadlines();
+    refreshIcons();
+});
+
+// Expose functions if needed
+window.renderCalendar = renderCalendar;
+window.renderSchedule = renderSchedule;
+window.loadSchedule = loadSchedule;
+window.loadCalendarEvents = loadCalendarEvents;
+window.updateDeadlines = updateDeadlines;
