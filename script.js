@@ -1585,7 +1585,6 @@ function initSchedule() {
 
             // Helper to generate day toggle buttons
             const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-            const dayFull = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
             let dayButtonsHtml = dayNames.map((name, index) => `
                 <button type="button" class="day-toggle-btn" data-day="${index}" style="
                     flex:1; 
@@ -1628,8 +1627,9 @@ function initSchedule() {
                         <input type="time" id="eventStart" value="09:00" required>
                     </div>
                     <div class="form-group" style="flex:1; min-width:120px;">
-                        <label for="eventEnd">End Time</label>
-                        <input type="time" id="eventEnd" value="10:00" required>
+                        <label for="eventEnd">End Time <small style="font-weight:400; color:var(--text-tertiary);">(optional)</small></label>
+                        <input type="time" id="eventEnd" placeholder="Optional">
+                        <small style="display:block; color:var(--text-tertiary); font-size:0.7rem; margin-top:0.2rem;">If left blank, defaults to 1 hour after start.</small>
                     </div>
                 </div>
 
@@ -1664,7 +1664,7 @@ function initSchedule() {
             `, async (overlay) => {
                 const title = overlay.querySelector('#eventTitle').value.trim();
                 const startTime = overlay.querySelector('#eventStart').value;
-                const endTime = overlay.querySelector('#eventEnd').value;
+                let endTime = overlay.querySelector('#eventEnd').value;
                 const location = overlay.querySelector('#eventLocation').value.trim();
                 const description = overlay.querySelector('#eventDescription').value.trim();
                 const colorClass = overlay.querySelector('#eventColor').value;
@@ -1680,9 +1680,22 @@ function initSchedule() {
                 });
 
                 if (!title) { showNotification('Please enter a title', true); return false; }
-                if (!startTime || !endTime) { showNotification('Please set start and end times', true); return false; }
-                if (startTime >= endTime) { showNotification('End time must be after start time', true); return false; }
+                if (!startTime) { showNotification('Please set a start time', true); return false; }
                 if (selectedDays.length === 0) { showNotification('Please select at least one day.', true); return false; }
+
+                // If endTime is empty, set it to startTime + 1 hour
+                if (!endTime) {
+                    const [hours, mins] = startTime.split(':').map(Number);
+                    let newHours = hours + 1;
+                    if (newHours >= 24) newHours = 23; // max 23:59
+                    endTime = `${String(newHours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+                }
+
+                // Validate endTime > startTime
+                if (startTime >= endTime) {
+                    showNotification('End time must be after start time.', true);
+                    return false;
+                }
 
                 try {
                     // Post to each selected day
@@ -1738,7 +1751,6 @@ function initSchedule() {
                     btn.addEventListener('click', function(e) {
                         e.stopPropagation();
                         this.classList.toggle('active');
-                        // Update style
                         if (this.classList.contains('active')) {
                             this.style.background = 'var(--primary)';
                             this.style.color = 'white';
@@ -1770,7 +1782,7 @@ function initSchedule() {
                         btn.style.borderColor = 'var(--border)';
                     });
                 });
-            }, 100); // small delay to ensure modal is in DOM
+            }, 100);
         });
     }
 
