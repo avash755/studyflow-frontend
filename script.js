@@ -108,7 +108,8 @@ async function loadTimedTasks() {
         return;
     }
     try {
-        const response = await fetch(`${API_BASE}/api/schedule?userId=${user.id}`, {
+        // Add a cache‑busting query parameter to ensure fresh data
+        const response = await fetch(`${API_BASE}/api/schedule?userId=${user.id}&_=${Date.now()}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         if (!response.ok) throw new Error('Failed to fetch schedule');
@@ -124,6 +125,8 @@ async function loadTimedTasks() {
         container.innerHTML = timedTasksData.map(task => renderTaskCard(task)).join('');
         attachTaskEventListeners(container);
         refreshIcons();
+
+        console.log('📋 Timed tasks loaded:', timedTasksData);
     } catch (err) {
         console.error('Load timed tasks error:', err);
         container.innerHTML = '<p style="color:var(--danger);">Failed to load tasks.</p>';
@@ -188,8 +191,10 @@ async function finishTimedTask(taskId) {
         showNotification('Task duration too short (less than 1 second).', true);
         return;
     }
+
     try {
-        const response = await fetch(`${API_BASE}/api/schedule/${taskId}/complete`, {
+        // 1. Mark task as completed in backend
+        const completeResponse = await fetch(`${API_BASE}/api/schedule/${taskId}/complete`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -197,12 +202,14 @@ async function finishTimedTask(taskId) {
             },
             body: JSON.stringify({ userId: user.id, durationSeconds: duration })
         });
-        if (!response.ok) {
-            const data = await response.json();
+        if (!completeResponse.ok) {
+            const data = await completeResponse.json();
             showNotification(data.error || 'Failed to complete task', true);
             return;
         }
-        await fetch(`${API_BASE}/api/stats`, {
+
+        // 2. Update stats (focus time, sessions, streak)
+        const statsResponse = await fetch(`${API_BASE}/api/stats`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -215,20 +222,53 @@ async function finishTimedTask(taskId) {
                 streakUpdate: true
             })
         });
-        await loadStats();
+        if (!statsResponse.ok) {
+            const data = await statsResponse.json();
+            showNotification(data.error || 'Failed to update stats', true);
+            return;
+        }
+
+        const statsData = await statsResponse.json();
+        console.log('✅ Stats updated:', statsData);
+
+        // 3. Update global variables and UI
+        totalFocusSecs = statsData.total_focus_seconds;
+        totalSteadySessions = statsData.total_sessions;
+        streak = statsData.streak;
+        lastDate = statsData.last_active_date;
+
+        // Update localStorage as fallback
+        localStorage.setItem('totalFocusSecs', totalFocusSecs);
+        localStorage.setItem('totalSteadySessions', totalSteadySessions);
+        localStorage.setItem('steadyStreak', streak);
+        localStorage.setItem('lastSteadyDate', lastDate);
+
+        // Update UI
         updateSteadyStats();
+        updateStats(); // dashboard stats
+
+        // 4. Clear active timer
         if (timerInterval) clearInterval(timerInterval);
         timerInterval = null;
         activeTimer = null;
+
+        // 5. Update the task in local data
         const task = timedTasksData.find(t => t.id === taskId);
         if (task) {
             const todayStr = new Date().toISOString().split('T')[0];
             task.last_completed_date = todayStr;
             task.last_duration_seconds = duration;
         }
-        showNotification(`✅ Completed task in ${Math.floor(duration/60)} min!`);
+
+        // 6. Re-render the task card
         updateTaskUI(taskId);
-        updateStats();
+
+        // 7. Show success
+        showNotification(`✅ Completed task in ${Math.floor(duration/60)} min!`);
+
+        // 8. Also refresh the whole list to ensure consistency (optional)
+        // loadTimedTasks(); // Uncomment if you want a full refresh
+
     } catch (err) {
         console.error('Finish task error:', err);
         showNotification('Could not connect to server.', true);
