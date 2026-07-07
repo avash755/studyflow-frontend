@@ -232,10 +232,10 @@ async function finishTimedTask(taskId) {
         console.log('✅ Stats updated:', statsData);
 
         // 3. Update global variables and UI
-        totalFocusSecs = statsData.total_focus_seconds;
-        totalSteadySessions = statsData.total_sessions;
-        streak = statsData.streak;
-        lastDate = statsData.last_active_date;
+        totalFocusSecs = statsData.total_focus_seconds || 0;
+        totalSteadySessions = statsData.total_sessions || 0;
+        streak = statsData.streak || 0;
+        lastDate = statsData.last_active_date || null;
 
         // Update localStorage as fallback
         localStorage.setItem('totalFocusSecs', totalFocusSecs);
@@ -243,16 +243,17 @@ async function finishTimedTask(taskId) {
         localStorage.setItem('steadyStreak', streak);
         localStorage.setItem('lastSteadyDate', lastDate);
 
-        // Update UI
+        // 4. Force a full stats reload and UI update
+        await loadStats();
         updateSteadyStats();
         updateStats(); // dashboard stats
 
-        // 4. Clear active timer
+        // 5. Clear active timer
         if (timerInterval) clearInterval(timerInterval);
         timerInterval = null;
         activeTimer = null;
 
-        // 5. Update the task in local data
+        // 6. Update the task in local data
         const task = timedTasksData.find(t => t.id === taskId);
         if (task) {
             const todayStr = new Date().toISOString().split('T')[0];
@@ -260,14 +261,11 @@ async function finishTimedTask(taskId) {
             task.last_duration_seconds = duration;
         }
 
-        // 6. Re-render the task card
+        // 7. Re-render the task card
         updateTaskUI(taskId);
 
-        // 7. Show success
+        // 8. Show success
         showNotification(`✅ Completed task in ${Math.floor(duration/60)} min!`);
-
-        // 8. Also refresh the whole list to ensure consistency (optional)
-        // loadTimedTasks(); // Uncomment if you want a full refresh
 
     } catch (err) {
         console.error('Finish task error:', err);
@@ -663,6 +661,7 @@ async function loadStats() {
         totalFocusSecs = 0;
         totalSteadySessions = 0;
         streak = 0;
+        lastDate = null;
         updateSteadyStats();
         return;
     }
@@ -1668,7 +1667,7 @@ function initSchedule() {
                     </div>
                     <div class="form-group" style="flex:1; min-width:120px;">
                         <label for="eventEnd">End Time <small style="font-weight:400; color:var(--text-tertiary);">(optional)</small></label>
-                        <input type="time" id="eventEnd" placeholder="Optional">
+                        <input type="time" id="eventEnd">
                         <small style="display:block; color:var(--text-tertiary); font-size:0.7rem; margin-top:0.2rem;">If left blank, defaults to 1 hour after start.</small>
                     </div>
                 </div>
@@ -1727,18 +1726,16 @@ function initSchedule() {
                 if (!endTime) {
                     const [hours, mins] = startTime.split(':').map(Number);
                     let newHours = hours + 1;
-                    if (newHours >= 24) newHours = 23; // max 23:59
+                    if (newHours >= 24) newHours = 23;
                     endTime = `${String(newHours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
                 }
 
-                // Validate endTime > startTime
                 if (startTime >= endTime) {
                     showNotification('End time must be after start time.', true);
                     return false;
                 }
 
                 try {
-                    // Post to each selected day
                     for (const d of selectedDays) {
                         const response = await fetch(`${API_BASE}/api/schedule`, {
                             method: 'POST',
@@ -1778,7 +1775,7 @@ function initSchedule() {
                 }
             });
 
-            // ---- After modal is rendered, attach day button events ----
+            // Day toggle events
             setTimeout(() => {
                 const overlay = document.querySelector('.modal-overlay');
                 if (!overlay) return;
@@ -1786,7 +1783,6 @@ function initSchedule() {
                 const selectAllBtn = overlay.querySelector('#selectAllDaysBtn');
                 const clearAllBtn = overlay.querySelector('#clearAllDaysBtn');
 
-                // Toggle individual day
                 dayBtns.forEach(btn => {
                     btn.addEventListener('click', function(e) {
                         e.stopPropagation();
@@ -1803,7 +1799,6 @@ function initSchedule() {
                     });
                 });
 
-                // Select All
                 selectAllBtn?.addEventListener('click', function() {
                     dayBtns.forEach(btn => {
                         btn.classList.add('active');
@@ -1813,7 +1808,6 @@ function initSchedule() {
                     });
                 });
 
-                // Clear All
                 clearAllBtn?.addEventListener('click', function() {
                     dayBtns.forEach(btn => {
                         btn.classList.remove('active');
@@ -3230,6 +3224,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         greetingEl.textContent = isLoggedIn ? `Welcome back, ${user.name}` : 'Welcome to StudyFlow';
     }
 
+    // Load stats, notifications, recent activity
     await loadStats();
     if (isLoggedIn) {
         await loadNotifications();
@@ -3244,6 +3239,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('notificationList').innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem 0;">Login to see notifications.</p>';
     }
 
+    // Initialize modules
     initNavigation();
     initDarkMode();
     initHamburger();
@@ -3261,12 +3257,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateStats();
     updateDeadlines();
 
+    // Notes
     if (isLoggedIn) {
         await loadNotes();
     } else {
         document.getElementById('notesListContainer').innerHTML = '<p style="color:var(--text-tertiary); text-align:center; padding:1rem;">Login to manage notes.</p>';
     }
 
+    // Notes event listeners
     document.getElementById('newNoteBtn')?.addEventListener('click', () => {
         clearEditor();
         document.getElementById('noteTitle').focus();
@@ -3307,6 +3305,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // Preview note
     document.getElementById('previewNoteBtn')?.addEventListener('click', () => {
         const content = document.getElementById('noteContent')?.value || '';
         const title = document.getElementById('noteTitle').value || 'Untitled';
@@ -3333,12 +3332,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
+    // Logout
     document.getElementById('logoutBtn')?.addEventListener('click', () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         window.location.href = 'login.html';
     });
 
+    // Add Subject
     document.getElementById('addSubjectBtn')?.addEventListener('click', () => {
         if (!requireLogin()) return;
         openModal('Add New Subject', `
@@ -3380,6 +3381,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
+    // Add Assignment
     document.getElementById('addAssignmentBtn')?.addEventListener('click', async () => {
         if (!requireLogin()) return;
 
@@ -3485,6 +3487,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
+    // Add Reminder
     document.getElementById('addReminderBtn')?.addEventListener('click', () => {
         if (!requireLogin()) return;
         openModal('Set Reminder', `
@@ -3517,6 +3520,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
+    // Notification bell
     document.getElementById('notificationBell')?.addEventListener('click', toggleNotifications);
 
     document.addEventListener('click', (e) => {
@@ -3532,6 +3536,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await loadNotifications();
     });
 
+    // Load reminders and start checking
     if (isLoggedIn) {
         await loadReminders();
         reminderCheckInterval = setInterval(checkReminders, 60000);
@@ -3544,6 +3549,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         refreshIcons();
     }
 
+    // Resume audio on any click
     document.addEventListener('click', () => {
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
