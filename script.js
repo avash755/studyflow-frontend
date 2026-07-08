@@ -26,7 +26,14 @@ function formatTime(seconds) {
 
 function renderTaskCard(task) {
     const todayStr = new Date().toISOString().split('T')[0];
-    const isCompleted = task.last_completed_date === todayStr;
+    
+    // Safely get completed date
+    let completedDate = task.last_completed_date;
+    if (completedDate && typeof completedDate === 'object') {
+        completedDate = completedDate.toISOString().split('T')[0];
+    }
+    const isCompleted = completedDate === todayStr;
+    
     const isActive = activeTimer && activeTimer.taskId === task.id;
     const isRunning = isActive && !activeTimer.paused;
     const isPaused = isActive && activeTimer.paused;
@@ -108,14 +115,28 @@ async function loadTimedTasks() {
         return;
     }
     try {
-        // Add a cache‑busting query parameter to ensure fresh data
         const response = await fetch(`${API_BASE}/api/schedule?userId=${user.id}&_=${Date.now()}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         if (!response.ok) throw new Error('Failed to fetch schedule');
         const allEvents = await response.json();
         const todayDay = new Date().getDay();
+        const todayStr = new Date().toISOString().split('T')[0];
+        
+        // Filter timed tasks for today
         timedTasksData = allEvents.filter(e => e.has_timer && e.day === todayDay);
+
+        // Normalize last_completed_date to string (YYYY-MM-DD)
+        timedTasksData.forEach(task => {
+            if (task.last_completed_date) {
+                // If it's a Date object, convert to ISO string
+                if (typeof task.last_completed_date === 'object') {
+                    task.last_completed_date = task.last_completed_date.toISOString().split('T')[0];
+                }
+                // Ensure it's a string
+                task.last_completed_date = String(task.last_completed_date);
+            }
+        });
 
         if (timedTasksData.length === 0) {
             container.innerHTML = '<p style="color:var(--text-tertiary);">No timed tasks for today.</p>';
@@ -271,6 +292,7 @@ async function finishTimedTask(taskId) {
         console.error('Finish task error:', err);
         showNotification('Could not connect to server.', true);
     }
+    await loadTimedTasks();
 }
 
 // ===================================================================
